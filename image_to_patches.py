@@ -1,3 +1,5 @@
+import os
+
 import cv2
 from matplotlib import pyplot as plt
 import numpy as np
@@ -114,6 +116,19 @@ class PatchFinder():
         im = self._generate_image_with_detection()
         plt.imsave(fn, im)
 
+    def save_patches(self, fp):
+        os.makedirs(fp, exist_ok=True)
+        im = np.array(self.im)
+        for (i, box) in enumerate(self._extracted_boxes):
+            (l, t, r, b) = box
+            patch = im[t:b,l:r]
+            tag = self.tags[i]
+            fn = Path(fp, f"{fp.name}_{tag}").with_suffix(".jpg")
+            plt.imsave(fn, patch)
+
+
+        pass
+
     def threshold(self):
         img = self.im
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -135,5 +150,6 @@ if __name__ == "__main__":
 
         fn = Path(out_path, im_fn.name)
         patch_finder.save_image(fn)
-    # patch_finder.threshold()
+        fp = Path(out_path, "patches", im_fn.stem)
+        patch_finder.save_patches(fp)
 
