@@ -4,3 +4,4 @@
 *.pt
 /pyvenv.cfg
 /share/*
+/__pycache__/*
