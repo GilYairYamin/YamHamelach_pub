@@ -6,8 +6,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from feature_model import model_NN
-model_NN_weights = "/home/avinoam/workspace/YAM_HAMELACH/results/17_05/weights/cp.weights.h5"
+from feature_model import model_NN, model_NN_weights
 from tqdm import tqdm
 np.set_printoptions(2)
 
@@ -36,11 +35,15 @@ class TwoImagesMatchFeatures():
     A class that can calculate the match score of two images
     by trying to apply homography between them.
     '''
-    def __init__(self, im1_fn, im2_fn):
+    def __init__(self, fn_1, fn_2, weights, naive=False):
+        self.load(fn_1, fn_2)
+        self._model_NN = model_NN
+        self._model_NN.load_weights(weights)
+        self._naive = naive # replacing complicated match model with a naive one
+
+    def load(self, im1_fn, im2_fn):
         self._im1_fn = im1_fn
         self._im2_fn = im2_fn
-        self._model_NN = model_NN
-        self._model_NN.load_weights(model_NN_weights)
 
     def calc_mathces(self):
         self._img1 = cv2.imread(str(self._im1_fn), cv2.IMREAD_GRAYSCALE) # queryImage
@@ -66,7 +69,7 @@ class TwoImagesMatchFeatures():
 
         # cv.drawMatchesKnn expects list of lists as matches.
     def find_homography(self):
-        if len(self._good) < MIN_GOOD_FEATURES_MATCH: # There is not reason to look for homography..
+        if len(self._good) < MIN_GOOD_FEATURES_MATCH: # There is no reason to look for homography..
             return False
         if (self._im1_fn.parts[-2]) == (self._im2_fn.parts[-2]):
             return False
@@ -105,19 +108,23 @@ class TwoImagesMatchFeatures():
 
     def calc_features(self):
         self._errors = np.zeros(len(self._good))
-        for (i, m) in enumerate(self._good):
-            # indicate that the two keypoints in the respective images
-            # map to each other
-            ptsA = np.array(self._kp1[m.queryIdx].pt)
-            ptsB = np.array(self._kp2[m.trainIdx].pt)
-            pt_b_homogenous = np.concatenate((ptsB, np.array([1])))
-            projected_p = self._H.dot(pt_b_homogenous)
-            projected_p_homogenous = projected_p / projected_p[2]
-            projected_p = projected_p_homogenous[:2]
-            error = np.linalg.norm(projected_p - ptsA)
-            self._errors[i] = error
-        self._bins = np.power(2, np.array([0,  2, 4, 6, 8, 12], dtype=np.float32))
+        self._bins = np.power(2, np.array([0,  2,  4,  6, 8, 10], dtype=np.float32))
         self._bins = np.concatenate((np.array([0]), self._bins))
+        try:
+            for (i, m) in enumerate(self._good):
+                # indicate that the two keypoints in the respective images
+                # map to each other
+                ptsA = np.array(self._kp1[m.queryIdx].pt)
+                ptsB = np.array(self._kp2[m.trainIdx].pt)
+                pt_b_homogenous = np.concatenate((ptsB, np.array([1])))
+                projected_p = self._H.dot(pt_b_homogenous)
+                projected_p_homogenous = projected_p / projected_p[2]
+                projected_p = projected_p_homogenous[:2]
+                error = np.linalg.norm(projected_p - ptsA)
+                self._errors[i] = error
+        except:
+            return False
+            # self._errors = np.zeros(len(self._good))
         self._errors_hist = np.histogram(self._errors, bins=self._bins)[0]
 
         self._errors_hist = self._errors_hist/self._errors_hist.sum()
@@ -128,21 +135,36 @@ class TwoImagesMatchFeatures():
             return False
 
         self.calc_features()
+        features, tags = self.to_features()
+        if features is False:
+            return False
+        features = np.array(self.to_features()[0])
+        if (features[1:] == 0).all():
+            return False
+        if self._naive:
+            return True
 
-        features = np.array([self.to_features()[0]])
-        predict = self._model_NN(features).numpy()
+        predict = self._model_NN(np.array([features])).numpy()
         return [False, True][np.argmax(predict)]
-        # implement here any features based model
-        # return self._errors_hist[:7].sum()>0.3
+
 
     def to_features(self):
+        if hasattr(self, "_errors_hist") == False:
+            return False,False
+
         features = []
         features_names = []
 
         features.append(len(self._good))
+        features.append(np.log(len(self._good)))
+
 
         features.extend(list(self._errors_hist))
-        features_names.extend( [f"error_{self._bins[i]}-{self._bins[i+1]}" for i in range(len(self._bins)-1)])
+
+        features_names.append("num_matches")
+        features_names.append("log_num_matches")
+
+        features_names.extend( [f"error_{self._bins[i]:.0f}-{self._bins[i+1]:.0f}" for i in range(len(self._bins)-1)])
 
         return features, features_names
 
@@ -153,8 +175,10 @@ class TwoImagesMatchFeatures():
 
         plt.imshow(img3),plt.show()
 class FeatureBasedMatcher(PatchMatcher):
-    def __init__(self, fn_1, fn_2):
-        self._feature_matcher = TwoImagesMatchFeatures(fn_1, fn_2)
+    def __init__(self, fn_1=False, fn_2=False, naive=False):
+        self._feature_matcher = TwoImagesMatchFeatures(fn_1=fn_1, fn_2=fn_2, naive=naive)
+    def load(self,fn_1, fn_2):
+        self._feature_matcher.load(fn_1, fn_2)
 
     def match(self):
         try:
@@ -255,8 +279,12 @@ if __name__ == "__main__":
     parser.add_argument("--patches")
     parser.add_argument("--csv_fn", default=False)
     parser.add_argument("--features_out", default=False)
+    parser.add_argument("--matches", default=False)
+    parser.add_argument("--weights", help="weights for NN model", default=model_NN_weights)
 
     args = parser.parse_args()
+    for tag in ['miss','true','false']:
+        os.makedirs(Path(args.matches,tag), exist_ok=True)
 
     if args.csv_fn:
         csv_matcher = CSVMatcher(args)
@@ -273,23 +301,24 @@ if __name__ == "__main__":
     header = False
     # features_out = open(args.features_out, 'w')
     # missed = open(args.features_out + "miss", 'w')
-    p_bar = tqdm(patch_path)
+    p_bar = tqdm(range(int(len(patch_path)*len(patch_path)/2)))
+    matcher = FeatureBasedMatcher()
     for i,fn_1 in enumerate(patch_path):
-        p_bar.update(1)
-        p_bar.refresh()
         for (j,fn_2) in enumerate(patch_path[i+1:]):
+            p_bar.update(1)
+            p_bar.refresh()
             csv_match = csv_matcher.is_match(fn_1, fn_2)
             # if not csv_match:
-            #     if np.random.random()>0.005:
-            #         continue
+            #     if np.random.random()>0.00002:
+                    # continue
 
-            matcher = FeatureBasedMatcher(fn_1, fn_2)
+            matcher.load(fn_1, fn_2)
             match = matcher.match()
             # print(match)
             if csv_match and not match:
                 print(f"f{fn_1.name},{fn_2.name} missed ")
                 # missed.write(f"f{fn_1.name},{fn_2.name},{os.linesep}")
-                path = Path("/home/avinoam/workspace/YAM_HAMELACH/results/17_05/match_images/miss",
+                path = Path(args.matches,"miss",
                             f"{fn_1.parts[-1]}-{fn_2.parts[-1]}").with_suffix(".jpg")
                 save_match_figure(fn_1, fn_2, path)
             if match:
@@ -303,23 +332,11 @@ if __name__ == "__main__":
                 print (m)
                 # features_out.write(m + os.linesep)
                 if csv_match:
-                    path = Path("/home/avinoam/workspace/YAM_HAMELACH/results/17_05/match_images/true",
+                    path = Path(args.matches,"true",
                               f"{fn_1.parts[-1]}-{fn_2.parts[-1]}").with_suffix(".jpg")
                 else:
-                    path = Path("/home/avinoam/workspace/YAM_HAMELACH/results/17_05/match_images/false",
+                    path = Path( args.matches,"false",
                               f"{fn_1.parts[-1]}-{fn_2.parts[-1]}").with_suffix(".jpg")
                 save_match_figure(fn_1, fn_2, path)
 
-                # plt.show()
-
-                # matcher._feature_matcher.plot()
-                # matcher._feature_matcher.plot_homography()
-
-
-            # feature_mathch = TwoImagesMatchFeatures
-            # feature_mathch.calc_mathces()
-            # feature_mathch.find_homography()
-            # error_hist = feature_mathch.calc_homography_errors()
-            # print(error_hist[:5], match)
-    # features_out.close()
-    # missed.close()
+              

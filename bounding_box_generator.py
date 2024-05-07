@@ -1,16 +1,33 @@
 import os
+from tqdm import tqdm
 
 import cv2
+from argparse import ArgumentParser
+from pathlib import Path
+
 from matplotlib import pyplot as plt
 import numpy as np
 from ultralytics import YOLO
-from pathlib import Path
-MODEL_INPUT_SHAPE = (640, 640)
-PATCH_CLS_NAME = 'patch'
 
-im_path = "/home/avinoam/workspace/YAM_HAMELACH/dataset/"
-# cp = '/home/avinoam/Desktop/autobrains/DL_Engineer/assignment_files/runs/detect/train16/weights/best.pt'
+MODEL_INPUT_SHAPE = (640, 640)
+
+
+'''
+This module gets:
+A. path to images containing multiple patches
+B. output path
+C. It runs a trained yolov8 model to detect pathes bounding boxes
+D. Generates: 
+    a. New images with bounding boxes, and mapping identifier index
+    b. crops of all patches in with name convention contains original file_name and identifier index in:
+        <output path>/patches/ 
+  
+'''
+
+# default yolov8 checkpoint, please edit before run
 cp = '/home/avinoam/workspace/YAM_HAMELACH/weights/train5/weights/best.pt'
+
+PATCH_CLS_NAME = 'patch'
 
 def center(box, dtype=None ):
     l,t,r,b = box
@@ -20,6 +37,9 @@ def center(box, dtype=None ):
     return center
 
 def center_radius(box):
+    '''
+    calculates the distance from image top-left to box center
+    '''
     return np.linalg.norm(center(box))
 
 
@@ -34,7 +54,9 @@ class PatchFinder():
         self._tags = []
 
     @property
-    def id_map(self): # a discrete ids map
+    def id_map(self):
+        # prepare indexing matrix of row*col to generate unique id for each patch,
+        # assuming that they don't fall into same box
         if self._id_map is None or self._id_map.shape[:2] != self.im.shape[:2]:
             cols, rows  = (32,32)
             ids = np.arange(rows*cols)
@@ -45,12 +67,17 @@ class PatchFinder():
         return self._id_map
 
     def predict_bounding_box(self):
+        # applying trained yolo on image to generate bounding boxes
         im = cv2.resize(self.im, MODEL_INPUT_SHAPE)
         results = self._model.predict([im], verbose=False)
         names = results[0].names
         boxes = results[0].boxes
         cls = boxes.cls.numpy()
-        images = []
+
+        # iterating over boxes,
+        # rescaling boxes to original image scale, and keep top,left,right,bottom into: self._extracted_boxes[]
+        # cropping patch from the image. and keep croped image into: self._images[]
+        self._images = []
         extracted_boxes = []
         for (i,box) in enumerate(boxes):
             if names[cls[i]] != PATCH_CLS_NAME:
@@ -67,15 +94,15 @@ class PatchFinder():
         self._extracted_boxes = sorted(self._extracted_boxes, key=center_radius)
 
         for l,t,r,b in self._extracted_boxes:
-            images.append(self.im[t:b,l:r])
+            self._images.append(self.im[t:b,l:r])
 
         DISPLAY = False
         if DISPLAY:
             for i in range(25):
-                if i == len(images):
+                if i == len(self._images):
                     break
                 plt.subplot(5,5,i+1)
-                plt.imshow(images[i])
+                plt.imshow(self._images[i])
             plt.show()
 
     def load_image(self, fn):
@@ -85,6 +112,11 @@ class PatchFinder():
 
     @property
     def tags(self):
+        '''
+        generate list of tags according to indexing policy,
+        the list map each patch in:  self._extracted_boxes[i]
+        to unique tag in:            self._tags[i]
+        '''
         if self._tags == []:
             for (i, box) in enumerate(self._extracted_boxes):
                 center_x, center_y = center(box, dtype=np.uint(16))
@@ -96,6 +128,9 @@ class PatchFinder():
         return self._tags
 
     def _generate_image_with_detection(self):
+        '''
+        generate image with rectangles over bounding-boxes, and identifier in the center, for visualization
+        '''
         im = np.array(self.im)
         for (i, box) in enumerate(self._extracted_boxes):
             (l, t, r, b) = box
@@ -113,23 +148,25 @@ class PatchFinder():
         plt.show()
 
     def save_image(self, fn):
+        os.makedirs(fn.parent, exist_ok=True)
         im = self._generate_image_with_detection()
         plt.imsave(fn, im)
 
-    def save_patches(self, fp):
-        os.makedirs(fp, exist_ok=True)
+    def save_patches(self, path):
+        '''
+        iterates over patches and save croped image into <path>/<filename_convention>.jpg>
+        '''
+        os.makedirs(path, exist_ok=True)
         im = np.array(self.im)
         for (i, box) in enumerate(self._extracted_boxes):
             (l, t, r, b) = box
             patch = im[t:b,l:r]
             tag = self.tags[i]
-            fn = Path(fp, f"{fp.name}_{tag}").with_suffix(".jpg")
+            fn = Path(path, f"{fp.name}_{tag}").with_suffix(".jpg")
             plt.imsave(fn, patch)
 
-
-        pass
-
     def threshold(self):
+        raise Exception("I do not think that anyone uses this.. feel free to remove :)")
         img = self.im
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         th = cv2.adaptiveThreshold(img,255,cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY,155,10)
@@ -137,18 +174,29 @@ class PatchFinder():
         plt.show()
 
 if __name__ == "__main__":
-    out_path = "/home/avinoam/workspace/YAM_HAMELACH/results/17_05/"
+    parser = ArgumentParser()
+    parser.add_argument("--im_path", help="paths to input images containing multiple patches")
+    parser.add_argument('--out_path', help="path to save images with bounding boxes and patches crops")
+    parser.add_argument('--cp', help="yolov8 cp path", default=cp)
+    args = parser.parse_args()
+
+    im_path = args.im_path
+    out_path = args.out_path
+    os.makedirs(out_path, exist_ok=True)
+
 
     patch_finder = PatchFinder()
-    for im_fn in Path(im_path).glob("*.jpg"):
-        patch_finder.load_image(str(im_fn))
-        # patch_finder.id_map
+    paths = list(Path(im_path).glob("*.jpg"))
+    pbar = tqdm(paths, desc='description')
 
+    for (i,im_fn) in enumerate(pbar): # tqdm():
+        pbar.set_description(f"{im_fn} {i}/{len(paths)}")
+        patch_finder.load_image(str(im_fn))
         patch_finder.predict_bounding_box()
 
         # patch_finder.show_image()
 
-        fn = Path(out_path, im_fn.name)
+        fn = Path(out_path, "bounding_boxes",im_fn.name)
         patch_finder.save_image(fn)
         fp = Path(out_path, "patches", im_fn.stem)
         patch_finder.save_patches(fp)
