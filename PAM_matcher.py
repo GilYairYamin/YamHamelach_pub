@@ -278,7 +278,6 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--patches")
     parser.add_argument("--csv_fn", default=False)
-    parser.add_argument("--features_out", default=False)
     parser.add_argument("--matches", default=False)
     parser.add_argument("--weights", help="weights for NN model", default=model_NN_weights)
 
@@ -299,8 +298,7 @@ if __name__ == "__main__":
         patch_path.extend(PAM_paths)
 
     header = False
-    # features_out = open(args.features_out, 'w')
-    # missed = open(args.features_out + "miss", 'w')
+
     p_bar = tqdm(range(int(len(patch_path)*len(patch_path)/2)))
     matcher = FeatureBasedMatcher()
     for i,fn_1 in enumerate(patch_path):
@@ -317,20 +315,17 @@ if __name__ == "__main__":
             # print(match)
             if csv_match and not match:
                 print(f"f{fn_1.name},{fn_2.name} missed ")
-                # missed.write(f"f{fn_1.name},{fn_2.name},{os.linesep}")
                 path = Path(args.matches,"miss",
                             f"{fn_1.parts[-1]}-{fn_2.parts[-1]}").with_suffix(".jpg")
                 save_match_figure(fn_1, fn_2, path)
             if match:
                 features, features_names = matcher.features()
                 if not header:
-                    # features_out.write("im1,im2,label,n_good,"+",".join(features_names)+os.linesep)
                     header = True
                 features = [f"{f:.3f}" for f in features]
                 m = fn_1.name, fn_2.name, ["False_pair","True_pair"][csv_match], *features
                 m = ",".join(m)
                 print (m)
-                # features_out.write(m + os.linesep)
                 if csv_match:
                     path = Path(args.matches,"true",
                               f"{fn_1.parts[-1]}-{fn_2.parts[-1]}").with_suffix(".jpg")
