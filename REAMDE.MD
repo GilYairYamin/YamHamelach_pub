@@ -33,7 +33,15 @@ B - lists of true/false piece names.
 
 ```python prepare_match_dataset.py --csv_fn <csv with ground true> --pairs_out <out path for matched pairs> --patches <base_path_for_prepared_patches>```
 
-D. Extract Features for DL model for True/False matches
+### D. Extract Features for DL model for True/False matches
 
 ```python feature_extractor.py --patches <pathces path? --pairs_path <pairs path> --features_path <path to save features>```
+
+### E. Train NN classifier for match/no-mathc between pieces
+
+```python3 feature_model.py```
+### F. Run Matches on the whole pieces dataset.
+``` python3 PAM_matcher --patches
+<pre prepaired pathces> --csv_fn <csv used for true/false labeling>
+--matches <path for output matches>```
 
