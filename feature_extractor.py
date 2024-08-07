@@ -1,7 +1,7 @@
 import os
 
 from tqdm import tqdm
-from src.PAM_matcher import TwoImagesMatchFeatures, to_patch_fn
+from PAM_matcher import TwoImagesMatchFeatures, to_patch_fn
 from argparse import ArgumentParser
 from pathlib import Path
 import pandas as pd
