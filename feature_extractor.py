@@ -6,11 +6,28 @@ from argparse import ArgumentParser
 from pathlib import Path
 import pandas as pd
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Access the environment variables
+base_path = os.getenv('BASE_PATH')
+
+CSV_IN =  os.path.join(base_path ,  os.getenv('CSV_IN'))
+PATCHES_IN = os.path.join(base_path, os.getenv('PATCHES_IN'))
+PAIRS_OUT = os.path.join(base_path, os.getenv('PAIRS_OUT'))
+
+# Optional: print to verify
+print("CSV_IN:", CSV_IN)
+print("PATCHES_IN:", PATCHES_IN)
+print("PAIRS_OUT:", PAIRS_OUT)
+
+
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--patches", help="path for patches")
-    parser.add_argument("--pairs_path", help="path for pre-prepared true/false images")
-    parser.add_argument("--features_path", help="path for output true/false features")
+    parser.add_argument("--patches", help="path for patches" , default=PATCHES_IN)
+    parser.add_argument("--pairs_path", help="path for pre-prepared true/false images" , default=PAIRS_OUT)
+    parser.add_argument("--features_path", help="path for output true/false features" , default=base_path)
     args = parser.parse_args()
 
     os.makedirs(args.features_path, exist_ok=True)

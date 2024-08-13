@@ -6,9 +6,30 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from feature_model import model_NN, model_NN_weights
 from tqdm import tqdm
 np.set_printoptions(2)
+
+
+from dotenv import load_dotenv
+import os
+
+# Load the .env file
+load_dotenv()
+
+# Access the environment variables
+base_path = os.getenv('BASE_PATH')
+
+CSV_IN =  os.path.join(base_path ,  os.getenv('CSV_IN'))
+PATCHES_IN = os.path.join(base_path, os.getenv('PATCHES_IN'))
+PAIRS_OUT = os.path.join(base_path, os.getenv('PAIRS_OUT'))
+DATA_FEATURES = os.path.join(base_path, os.getenv('DATA_FEATURES'))
+MODEL_NN_WEIGHTS = os.path.join(base_path, os.getenv('MODEL_NN_WEIGHTS'))
+
+# Optional: print to verify
+print("CSV_IN:", CSV_IN)
+print("PATCHES_IN:", PATCHES_IN)
+print("PAIRS_OUT:", PAIRS_OUT)
+
 
 def save_match_figure(fn_1, fn_2, path):
     plt.subplot(1, 2, 1)
@@ -26,7 +47,7 @@ def to_patch_fn(base_dir, PAM, box_id):
 
 class PatchMatcher(object):
     def __init__(self, args):
-        self._patches_path = args.patches
+        self._patches_path = args.patches_in
 
 
 MIN_GOOD_FEATURES_MATCH = 6
@@ -35,10 +56,10 @@ class TwoImagesMatchFeatures():
     A class that can calculate the match score of two images
     by trying to apply homography between them.
     '''
-    def __init__(self, fn_1, fn_2, weights, naive=False):
+    def __init__(self, fn_1, fn_2, naive=False):
+
         self.load(fn_1, fn_2)
-        self._model_NN = model_NN
-        self._model_NN.load_weights(weights)
+
         self._naive = naive # replacing complicated match model with a naive one
 
     def load(self, im1_fn, im2_fn):
@@ -144,6 +165,11 @@ class TwoImagesMatchFeatures():
         if self._naive:
             return True
 
+        # not naive mode
+
+        from feature_model import model_NN
+        self._model_NN = model_NN
+        self._model_NN.load_weights(model_NN_weights)
         predict = self._model_NN(np.array([features])).numpy()
         return [False, True][np.argmax(predict)]
 
@@ -202,7 +228,9 @@ class CSVMatcher(PatchMatcher):
         self._csv = args.csv_fn
         self._raw_csv = pd.read_csv(self._csv)
         self._valid_csv = self._raw_csv[self._raw_csv.Frg.str.isdigit() == True]
-        self._valid_csv = self._valid_csv[self._valid_csv.Box.str.isdigit() == True]
+        #self._valid_csv = self._valid_csv[self._valid_csv.Box.str.isdigit() == True]
+        self._valid_csv = self._valid_csv[self._valid_csv['Box'].apply(lambda x: np.modf(x)[0] == 0.0)]
+
         self._valid_csv = self._add_patch_fp(self._valid_csv)
         self._valid_csv[["Scroll", "Frg"]].value_counts() # [lambda x: x>20].index.tolist()
         self._grouped = self._valid_csv.groupby(["Scroll", "Frg"])
@@ -275,6 +303,8 @@ class CSVMatcher(PatchMatcher):
         pass
 
 if __name__ == "__main__":
+    from feature_model import model_NN, model_NN_weights
+
     parser = ArgumentParser()
     parser.add_argument("--patches")
     parser.add_argument("--csv_fn", default=False)

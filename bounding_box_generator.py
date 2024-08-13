@@ -25,7 +25,6 @@ D. Generates:
 '''
 
 # default yolov8 checkpoint, please edit before run
-cp = '/home/avinoam/workspace/YAM_HAMELACH/weights/train5/weights/best.pt'
 
 PATCH_CLS_NAME = 'patch'
 
@@ -173,10 +172,14 @@ class PatchFinder():
         plt.imshow(th)
         plt.show()
 
+INPUT_PATH = "/Users/assafspanier/Dropbox/MY_DOC/Teaching/JCE/Research/research2024.jce.ac.il/YamHamelach_data_n_model/input_dead_see_images/"
+OUTPUT_PATH = "/Users/assafspanier/Dropbox/MY_DOC/Teaching/JCE/Research/research2024.jce.ac.il/YamHamelach_data_n_model/bounding_boxes_crops/"
+cp = "/Users/assafspanier/Dropbox/MY_DOC/Teaching/JCE/Research/research2024.jce.ac.il/YamHamelach_data_n_model/best.pt"
+
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--im_path", help="paths to input images containing multiple patches")
-    parser.add_argument('--out_path', help="path to save images with bounding boxes and patches crops")
+    parser.add_argument("--im_path", help="paths to input images containing multiple patches" , default=INPUT_PATH)
+    parser.add_argument('--out_path', help="path to save images with bounding boxes and patches crops", default=OUTPUT_PATH)
     parser.add_argument('--cp', help="yolov8 cp path", default=cp)
     args = parser.parse_args()
 

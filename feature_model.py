@@ -2,12 +2,12 @@ import pandas as pd
 import sklearn.model_selection
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.preprocessing import OneHotEncoder
+from tensorflow.keras import optimizers
+
 import tensorflow as tf
 import keras
 import numpy as np
 
-model_NN_weights = "/home/avinoam/workspace/YAM_HAMELACH/results/17_05/weights/cp.weights.h5"
-data ="/home/avinoam/workspace/YAM_HAMELACH/results/17_05/features_for_training_with_log/features.csv"
 data_df = pd.read_csv(data)
 n_features = data_df.shape[1]-3
 
@@ -28,9 +28,10 @@ model_NN = keras.models.Sequential( (
 )
 
 if __name__ == "__main__":
+
     # model_NN.load_weights(model_NN_weights)
     model_NN.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=0.0002),  # Optimizer
+        optimizer=optimizers.Adam(learning_rate=0.0002),  # Optimizer
         # Loss function to minimize
         loss=keras.losses.CategoricalCrossentropy(),
         # List of metrics to monitor
