@@ -1,14 +1,12 @@
-import cv2
-import pickle
-import os
+
 from tqdm import tqdm  # Progress bar
 import numpy as np
 
 import cv2
 import pickle
-import os
 from typing import Dict, List, Tuple
-
+import matplotlib.pyplot as plt
+import json
 
 class NaiveImageMatcher:
     def __init__(self, cache_file: str = "image_cache.pkl"):
@@ -77,6 +75,8 @@ class NaiveImageMatcher:
     def is_match(self, file1: str, file2: str, threshold: int = 10) -> bool:
         _, _, _, _, good_matches = self.calc_matches(file1, file2)
         return len(good_matches) >= threshold
+
+
 if __name__ == "__main1__":
     # Example usage:
     matcher = NaiveImageMatcher()
@@ -96,11 +96,27 @@ import csv
 
 
 class FragmentMatcher:
-    def __init__(self, pam_csv_file, image_base_path):
+    # def __init__(self, pam_csv_file, image_base_path):
+    #     self.pam_csv_file = pam_csv_file
+    #     self.image_base_path = image_base_path
+    #     self.matcher = NaiveImageMatcher()
+    #     self.missing_files = []  # To store missing files
+    def __init__(self, pam_csv_file, image_base_path, original_image_path):
         self.pam_csv_file = pam_csv_file
         self.image_base_path = image_base_path
+        self.original_image_path = original_image_path
         self.matcher = NaiveImageMatcher()
-        self.missing_files = []  # To store missing files
+        self.missing_files = []
+
+
+    def get_patch_info(self, file_name, box):
+        """Load patch information from the JSON file."""
+        json_file = os.path.join(self.image_base_path, file_name, f"{file_name}_patch_info.json")
+        if os.path.exists(json_file):
+            with open(json_file, 'r') as f:
+                patch_info = json.load(f)
+            return patch_info.get(str(int(box)))
+        return None
 
     def read_csv(self):
         """Read the CSV file and return it as a pandas DataFrame."""
@@ -112,7 +128,7 @@ class FragmentMatcher:
         image_file = f"{file_name}_{int(box)}.jpg"
         return os.path.join(self.image_base_path, file_name, image_file)
 
-    def print_matched_pam_files(self):
+    def get_matched_pam_files(self):
         """Find matches based on Scroll and Fragment with different boxes."""
         df = self.read_csv()
 
@@ -130,7 +146,6 @@ class FragmentMatcher:
         return result_df
 
     def calculate_distances(self, matches_df):
-        """Go over the folders and calculate distances between matching images."""
         distances = []
 
         for index, row in tqdm(matches_df.iterrows(), total=matches_df.shape[0], desc="Processing Matches"):
@@ -138,16 +153,18 @@ class FragmentMatcher:
             image_path2 = self.get_image_path(row['File_y'], row['Box_y'])
 
             if os.path.exists(image_path1) and os.path.exists(image_path2):
-                distance = self.matcher.calc_matches(image_path1, image_path2)
+                kp1, kp2, des1, des2, good_matches = self.matcher.calc_matches(image_path1, image_path2)
                 distances.append({
                     'scroll': row['Scroll'],
                     'fragment': row['Frg'],
                     'file1': image_path1,
                     'file2': image_path2,
-                    'distance': len(distance[4])  # Number of good matches
+                    'distance': len(good_matches),
+                    'keypoints1': [(kp.pt[0], kp.pt[1]) for kp in kp1],
+                    'keypoints2': [(kp.pt[0], kp.pt[1]) for kp in kp2],
+                    'matches': [(m[0], m[1]) for m in good_matches]
                 })
             else:
-                # Store missing file details for logging
                 self.missing_files.append({
                     'scroll': row['Scroll'],
                     'fragment': row['Frg'],
@@ -157,31 +174,133 @@ class FragmentMatcher:
 
         return distances
 
+    def visualize_matches(self, distances, output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+        for i, match in enumerate(distances):
+            # Load original images
+            img1_name = os.path.basename(match['file1']).split('_')[0] + '.jpg'
+            img2_name = os.path.basename(match['file2']).split('_')[0] + '.jpg'
+
+            img1_path = os.path.join(self.original_image_path, img1_name)
+            img2_path = os.path.join(self.original_image_path, img2_name)
+
+            img1 = cv2.imread(img1_path)
+            img2 = cv2.imread(img2_path)
+
+            if img1 is None or img2 is None:
+                print(f"Couldn't load images for match {i + 1}. Skipping...")
+                continue
+
+            # Convert to RGB for matplotlib
+            img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
+            img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
+
+            # Get patch information
+            patch1_info = self.get_patch_info(os.path.basename(match['file1']).split('_')[0],
+                                              os.path.basename(match['file1']).split('_')[1].split('.')[0])
+            patch2_info = self.get_patch_info(os.path.basename(match['file2']).split('_')[0],
+                                              os.path.basename(match['file2']).split('_')[1].split('.')[0])
+
+            if patch1_info is None or patch2_info is None:
+                print(f"Couldn't load patch info for match {i + 1}. Skipping...")
+                continue
+
+            # Load patch images
+            patch1 = cv2.imread(match['file1'])
+            patch2 = cv2.imread(match['file2'])
+            patch1 = cv2.cvtColor(patch1, cv2.COLOR_BGR2RGB)
+            patch2 = cv2.cvtColor(patch2, cv2.COLOR_BGR2RGB)
+
+            # Create a new figure with 4 subplots
+            fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(20, 20))
+
+            # Display the original images
+            ax1.imshow(img1)
+            ax2.imshow(img2)
+
+            # Display the patch images
+            ax3.imshow(patch1)
+            ax4.imshow(patch2)
+
+            # Plot matching keypoints on original images and patches
+            for m in match['matches']:
+                kp1 = match['keypoints1'][m[0]]
+                kp2 = match['keypoints2'][m[1]]
+
+                # Adjust keypoint coordinates for original images
+                pt1_orig = (kp1[0] + patch1_info['coordinates'][0], kp1[1] + patch1_info['coordinates'][1])
+                pt2_orig = (kp2[0] + patch2_info['coordinates'][0], kp2[1] + patch2_info['coordinates'][1])
+
+                # Plot keypoints on original images
+                ax1.plot(pt1_orig[0], pt1_orig[1], 'ro', markersize=3)
+                ax2.plot(pt2_orig[0], pt2_orig[1], 'ro', markersize=3)
+
+                # Plot keypoints on patches
+                ax3.plot(kp1[0], kp1[1], 'ro', markersize=3)
+                ax4.plot(kp2[0], kp2[1], 'ro', markersize=3)
+
+            # Draw rectangles around patches on original images
+            rect1 = plt.Rectangle((patch1_info['coordinates'][0], patch1_info['coordinates'][1]),
+                                  patch1_info['coordinates'][2] - patch1_info['coordinates'][0],
+                                  patch1_info['coordinates'][3] - patch1_info['coordinates'][1],
+                                  fill=False, edgecolor='yellow', linewidth=2)
+            rect2 = plt.Rectangle((patch2_info['coordinates'][0], patch2_info['coordinates'][1]),
+                                  patch2_info['coordinates'][2] - patch2_info['coordinates'][0],
+                                  patch2_info['coordinates'][3] - patch2_info['coordinates'][1],
+                                  fill=False, edgecolor='yellow', linewidth=2)
+            ax1.add_patch(rect1)
+            ax2.add_patch(rect2)
+
+            # Set titles
+            fig.suptitle(f"Match Score: {match['distance']}", fontsize=20)
+            ax1.set_title(f"Original Image 1: {img1_name}", fontsize=14)
+            ax2.set_title(f"Original Image 2: {img2_name}", fontsize=14)
+            ax3.set_title(f"Patch 1: {os.path.basename(match['file1'])}", fontsize=14)
+            ax4.set_title(f"Patch 2: {os.path.basename(match['file2'])}", fontsize=14)
+
+            # Remove axes
+            for ax in [ax1, ax2, ax3, ax4]:
+                ax.axis('off')
+
+            # Adjust layout and save the figure
+            plt.tight_layout()
+            output_file = os.path.join(output_dir, f"match_{i + 1}.png")
+            plt.savefig(output_file, dpi=300, bbox_inches='tight')
+            plt.close(fig)
+
     def write_csv(self, distances, success_csv, missing_csv):
         """Write the results to two CSV files."""
         # Write the successful match results to CSV
         with open(success_csv, mode='w', newline='') as file:
             writer = csv.DictWriter(file, fieldnames=['scroll', 'fragment', 'file1', 'file2', 'distance'])
             writer.writeheader()
-            writer.writerows(distances)
+            for match in distances:
+                writer.writerow({
+                    'scroll': match['scroll'],
+                    'fragment': match['fragment'],
+                    'file1': match['file1'],
+                    'file2': match['file2'],
+                    'distance': match['distance']
+                })
 
         # Write the missing file information to another CSV
         with open(missing_csv, mode='w', newline='') as file:
             writer = csv.DictWriter(file, fieldnames=['scroll', 'fragment', 'file1', 'file2'])
             writer.writeheader()
             writer.writerows(self.missing_files)
-
-    def run(self, success_csv='matches.csv', missing_csv='missing_files.csv'):
-        """Main method to run the matcher, calculate distances, and write to CSV."""
-        matches_df = self.print_matched_pam_files()
+    def run(self, success_csv='matches.csv', missing_csv='missing_files.csv', output_dir='match_visualizations'):
+        matches_df = self.get_matched_pam_files()
         distances = self.calculate_distances(matches_df)
         self.write_csv(distances, success_csv, missing_csv)
+        self.visualize_matches(distances, output_dir)
         print(f"Results written to {success_csv} and missing file info to {missing_csv}")
+        print(f"Match visualizations saved in {output_dir}")
 
-
+# Update the main script to include the path to original images
 if __name__ == "__main__":
-    # Usage
     csv_file = "/Users/assafspanier/Dropbox/MY_DOC/Teaching/JCE/Research/research2024.jce.ac.il/YamHamelach_data_n_model/PAM_Identification_for_Asaf_Round_1_avinoamEdit.csv"
     image_base_path = "/Users/assafspanier/Dropbox/MY_DOC/Teaching/JCE/Research/research2024.jce.ac.il/YamHamelach_data_n_model/bounding_boxes_crops/patches/"
-    matcher = FragmentMatcher(csv_file, image_base_path)
-    matcher.run(success_csv='matches.csv', missing_csv='missing_files.csv')
+    original_image_path = "/Users/assafspanier/Dropbox/MY_DOC/Teaching/JCE/Research/research2024.jce.ac.il/YamHamelach_data_n_model/input_dead_see_images/"
+    matcher = FragmentMatcher(csv_file, image_base_path, original_image_path)
+    matcher.run(success_csv='matches.csv', missing_csv='missing_files.csv', output_dir='match_visualizations')
