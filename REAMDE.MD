@@ -1,5 +1,21 @@
 # Yam Hamelach - Kumeran scripts: matching pieces
 
+## A. Generate boxes.
+>> bounding_box_generation_V2.py
+
+## B. 
+
+
+
+
+
+
+
+
+
+
+
+# OLD 
 ## A. Train YOLO model to detect pieces.
 
 # Install
@@ -11,6 +27,8 @@ Download repository, create your python3-venv, and install requirements by:\
 
 * open ```train.py``` file and update ```save_dir```, ```data_path```, ```cp``` pathes.
 * run ```python3 train.py```
+
+
 
 ### B. generate patches.
 run

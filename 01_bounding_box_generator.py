@@ -25,7 +25,7 @@ def center_radius(box):
 
 
 class PatchFinder():
-    def __init__(self):
+    def __init__(self,cp):
         self._model = YOLO(cp)
         self._im_fn = None
         self.im = None
@@ -129,23 +129,37 @@ class PatchFinder():
             json.dump(self._patch_info, f, indent=2)
 
 
-INPUT_PATH = "/Users/assafspanier/Dropbox/MY_DOC/Teaching/JCE/Research/research2024.jce.ac.il/YamHamelach_data_n_model/input_dead_see_images/"
-OUTPUT_PATH = "/Users/assafspanier/Dropbox/MY_DOC/Teaching/JCE/Research/research2024.jce.ac.il/YamHamelach_data_n_model/bounding_boxes_crops/"
-cp = "/Users/assafspanier/Dropbox/MY_DOC/Teaching/JCE/Research/research2024.jce.ac.il/YamHamelach_data_n_model/best.pt"
+from dotenv import load_dotenv
+import os
+
+# Load the .env file
+load_dotenv()
+base_path = os.getenv('BASE_PATH')
+
+
+IMAGES_IN = os.path.join(base_path, os.getenv('IMAGES_IN'))
+PATCHES_DIR = os.path.join(base_path, os.getenv('PATCHES_IN'))
+BBOX_DIR = os.path.join(base_path, os.getenv('BBOXES_IN'))
+MODEL_NN_WEIGHTS = os.path.join(base_path, os.getenv('MODEL_NN_WEIGHTS'))
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--im_path", help="paths to input images containing multiple patches", default=INPUT_PATH)
-    parser.add_argument('--out_path', help="path to save images with bounding boxes and patches crops",
-                        default=OUTPUT_PATH)
-    parser.add_argument('--cp', help="yolov8 cp path", default=cp)
+    parser.add_argument("--im_path", help="paths to input images containing multiple patches", default=IMAGES_IN)
+    parser.add_argument('--patches_dir', help="path to save images with bounding boxes and patches crops", default=PATCHES_DIR)
+    parser.add_argument('--bbox_dir', help="path to save bounding box images", default=BBOX_DIR)
+
+    parser.add_argument('--cp', help="yolov8 cp path", default=MODEL_NN_WEIGHTS)
     args = parser.parse_args()
 
     im_path = args.im_path
-    out_path = args.out_path
-    os.makedirs(out_path, exist_ok=True)
+    patches_dir = args.patches_dir
+    os.makedirs(patches_dir, exist_ok=True)
 
-    patch_finder = PatchFinder()
+    bbox_dir = args.bbox_dir
+    os.makedirs(bbox_dir, exist_ok=True)
+
+
+    patch_finder = PatchFinder(args.cp)
     paths = list(Path(im_path).glob("*.jpg"))
     pbar = tqdm(paths, desc='Processing images')
 
@@ -154,10 +168,10 @@ if __name__ == "__main__":
         patch_finder.load_image(str(im_fn))
         patch_finder.predict_bounding_box()
 
-        fn = Path(out_path, "bounding_boxes", im_fn.name)
+        fn = Path(BBOX_DIR , im_fn.name)
         patch_finder.save_image(fn)
 
-        fp = Path(out_path, "patches", im_fn.stem)
+        fp = Path(PATCHES_DIR,  im_fn.stem)
         patch_finder.save_patches(fp)
 
         # Save patch information
