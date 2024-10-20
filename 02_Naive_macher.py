@@ -105,7 +105,10 @@ class NaiveImageMatcher:
             return []
 
         return good_matches
-
+import os
+import csv
+import itertools
+from tqdm import tqdm
 
 class FragmentMatcher:
     def __init__(self, image_base_path):
@@ -121,60 +124,48 @@ class FragmentMatcher:
                     image_files.append(os.path.join(root, file))
         return image_files
 
-    def calculate_distances(self, image_files: List[str], success_csv: str , debug: bool = False) -> None:
-        total_iterations = sum(range(1, len(image_files)))  # Total number of comparisons
+    def _get_processed_pairs(self, success_csv: str) -> set:
+        """Read the CSV file and get the set of already processed image pairs."""
+        processed_pairs = set()
+        if os.path.exists(success_csv):
+            with open(success_csv, mode='r') as file:
+                reader = csv.DictReader(file)
+                for row in reader:
+                    processed_pairs.add((row['file1'], row['file2']))
+        return processed_pairs
 
-        if debug == True:
+    def calculate_distances(self, image_files: List[str], success_csv: str, debug: bool = False) -> None:
+        total_iterations = sum(range(1, len(image_files)))  # Total number of comparisons
+        processed_pairs = self._get_processed_pairs(success_csv)
+
+        if debug:
             import tracemalloc
             import objgraph
             import psutil
-
             tracemalloc.start()
 
-
-
-        with open(success_csv, mode='w', newline='') as file:
+        with open(success_csv, mode='a', newline='') as file:
             fieldnames = ['file1', 'file2', 'distance', 'matches']
             writer = csv.DictWriter(file, fieldnames=fieldnames)
-            writer.writeheader()
+
+            # Write header only if the file is newly created
+            if not processed_pairs:
+                writer.writeheader()
 
             with tqdm(total=total_iterations, desc="Processing Patches", disable=False) as pbar:
                 for i, j in itertools.combinations(range(len(image_files)), 2):
-                    if (debug == True) and ((i % 2 == 0) and (j == i+1)):
-                        os.system('clear')
-                        print(f"====== {i} , {j}")
+                    image_path1 = image_files[i]
+                    image_path2 = image_files[j]
 
-                        # Get current process
-                        process = psutil.Process(os.getpid())
-
-                        # CPU usage in percentage
-                        cpu_usage = process.cpu_percent(interval=1)
-                        print(f"CPU Usage: {cpu_usage}%")
-
-                        # Memory usage in MB
-                        memory_info = process.memory_info()
-                        print(f"Memory Usage: {memory_info.rss / 1024 ** 2:.2f} MB")
-
-                        # Visualize the most common types of objects
-                        objgraph.show_most_common_types()
-
-                        # Find out which objects are consuming memory
-                        objgraph.show_growth()
-
-                        # Get memory snapshot
-                        snapshot = tracemalloc.take_snapshot()
-
-                        # Display the top memory-consuming lines
-                        top_stats = snapshot.statistics('lineno')
-                        print("[ Top 10 Memory Consuming Variables ]")
-                        for stat in top_stats[:10]:
-                            print(stat)
+                    # Check if the pair has already been processed
+                    if (image_path1, image_path2) in processed_pairs or (image_path2, image_path1) in processed_pairs:
+                        pbar.update(1)  # Update progress bar
+                        continue  # Skip this pair
 
                     # Inner loop for calculating matches
                     pbar.update(1)
-                    image_path1 = image_files[i]
-                    image_path2 = image_files[j]
                     good_matches = self.matcher.calc_matches(image_path1, image_path2)
+
                     # Write match details to the CSV
                     writer.writerow({
                         'file1': image_path1,
@@ -183,11 +174,13 @@ class FragmentMatcher:
                         'matches': [(m[0], m[1], m[2]) for m in good_matches]
                     })
 
-    def run(self, success_csv='matches_v3.csv' , debug=False):
-        image_files = self.get_image_files()
-        self.calculate_distances(image_files, success_csv , debug=debug)
-        print(f"Results written to {success_csv}")
+                    # Flush to ensure data is written to the file immediately
+                    file.flush()
 
+    def run(self, success_csv='matches_v3.csv', debug=False):
+        image_files = self.get_image_files()
+        self.calculate_distances(image_files, success_csv, debug=debug)
+        print(f"Results written to {success_csv}")
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
@@ -197,4 +190,4 @@ if __name__ == "__main__":
     base_path = os.getenv('BASE_PATH')
     PATCHES_DIR = os.path.join(base_path, os.getenv('PATCHES_IN'))
     matcher = FragmentMatcher(PATCHES_DIR)
-    matcher.run(success_csv='matches_v3.csv' , debug=DEBUG)
+    matcher.run(success_csv='matches_v3.csv', debug=DEBUG)
