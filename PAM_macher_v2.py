@@ -122,11 +122,11 @@ class FragmentMatcher:
         """Read the CSV file and return it as a pandas DataFrame."""
         return pd.read_csv(self.pam_csv_file)
 
-    def get_image_path(self, file_name, box):
-        """Generate the image path based on file and box information."""
+        def get_image_path(self, file_name, box):
+            """Generate the image path based on file and box information."""
 
-        image_file = f"{file_name}_{int(box)}.jpg"
-        return os.path.join(self.image_base_path, file_name, image_file)
+            image_file = f"{file_name}_{int(box)}.jpg"
+            return os.path.join(self.image_base_path, file_name, image_file)
 
     def get_matched_pam_files(self):
         """Find matches based on Scroll and Fragment with different boxes."""

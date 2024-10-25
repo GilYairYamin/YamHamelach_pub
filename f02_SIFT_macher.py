@@ -7,9 +7,16 @@ import csv
 from tqdm import tqdm
 import itertools
 
+from dotenv import load_dotenv
+
+import sys
+
+# Increase the CSV field size limit
+csv.field_size_limit(sys.maxsize)
 # Cache manager for storing image descriptors and keypoints
 class DescriptorCacheManager:
-    def __init__(self, cache_dir: str = "image_cache"):
+    def __init__(self, cache_dir):
+
         self.cache_dir = cache_dir
         if not os.path.exists(self.cache_dir):
             os.makedirs(self.cache_dir)
@@ -36,15 +43,6 @@ class DescriptorCacheManager:
         with open(cache_file, 'wb') as f:
             pickle.dump(data, f)
 
-# NaiveImageMatcher focused on matching descriptors and keypoints
-class NaiveImageMatcher:
-    def __init__(self, descriptor_cache: DescriptorCacheManager):
-        self.cache_manager = descriptor_cache
-
-    def _get_image_key(self, file_path: str) -> str:
-        """Generate a unique key for the image based on its file path."""
-        return os.path.basename(file_path)
-
     def _serialize_keypoints(self, keypoints: List[cv2.KeyPoint]) -> List[Tuple]:
         """Serialize keypoints for saving to the cache."""
         return [(kp.pt, kp.size, kp.angle, kp.response, kp.octave, kp.class_id) for kp in keypoints]
@@ -54,13 +52,13 @@ class NaiveImageMatcher:
         return [cv2.KeyPoint(x=pt[0][0], y=pt[0][1], size=pt[1], angle=pt[2],
                              response=pt[3], octave=pt[4], class_id=pt[5]) for pt in keypoints_data]
 
-    def _process_image(self, file_path: str) -> Tuple[List[cv2.KeyPoint], np.ndarray]:
+    def process_image(self, file_path: str) -> Tuple[List[cv2.KeyPoint], np.ndarray]:
         """Process an image, either by loading cached data or computing new descriptors."""
-        image_key = self._get_image_key(file_path)
+        image_key = os.path.basename(file_path)
 
-        if self.cache_manager._is_cached(image_key):
+        if self._is_cached(image_key):
             # Load cached data if available
-            cached_data = self.cache_manager._load_cache(image_key)
+            cached_data = self._load_cache(image_key)
             if cached_data:
                 keypoints = self._deserialize_keypoints(cached_data['keypoints'])
                 descriptors = cached_data['descriptors']
@@ -75,17 +73,26 @@ class NaiveImageMatcher:
         keypoints, descriptors = sift.detectAndCompute(img, None)
 
         # Save the computed data to the cache
-        self.cache_manager._save_cache(image_key, {
+        self._save_cache(image_key, {
             'keypoints': self._serialize_keypoints(keypoints),
             'descriptors': descriptors
         })
 
         return keypoints, descriptors
 
+
+# Class to handle matching between images using SIFT and BFMatcher
+class NaiveImageMatcher:
+    def __init__(self, descriptor_cache: DescriptorCacheManager):
+        self.descriptor_cache = descriptor_cache
+
     def calc_matches(self, file1: str, file2: str) -> List[cv2.DMatch]:
         """Calculate SIFT matches between two images, returning only good matches."""
-        kp1, des1 = self._process_image(file1)
-        kp2, des2 = self._process_image(file2)
+        # Get descriptors and keypoints for both images
+        kp1, des1 = self.descriptor_cache.process_image(file1)
+        kp2, des2 = self.descriptor_cache.process_image(file2)
+
+
 
         try:
             good_matches = []
@@ -105,11 +112,10 @@ class NaiveImageMatcher:
 
         return good_matches
 
-# FragmentMatcher for processing pairs of image fragments
 class FragmentMatcher:
-    def __init__(self, image_base_path: str):
+    def __init__(self, image_base_path: str , cash_dir: str):
         self.image_base_path = image_base_path
-        self.matcher = NaiveImageMatcher(DescriptorCacheManager())
+        self.matcher = NaiveImageMatcher(DescriptorCacheManager(cash_dir))
 
     def get_image_files(self) -> List[str]:
         """Get a list of all image file paths in the image_base_path directory."""
@@ -147,6 +153,17 @@ class FragmentMatcher:
                     image_path1 = image_files[i]
                     image_path2 = image_files[j]
 
+                    dirname1 = os.path.dirname(image_path1)
+                    dirname2 = os.path.dirname(image_path2)
+
+                    base_name1 = os.path.basename(image_path1)
+                    base_name2 = os.path.basename(image_path2)
+
+                    # different patches can't be from the same directory
+                    if (dirname1 == dirname2):
+                        pbar.update(1)  # Update progress bar
+                        continue  # Skip if the images are from the same directory
+
                     # Check if the pair has already been processed
                     if (image_path1, image_path2) in processed_pairs or (image_path2, image_path1) in processed_pairs:
                         pbar.update(1)  # Update progress bar
@@ -158,8 +175,8 @@ class FragmentMatcher:
 
                     # Write match details to the CSV
                     writer.writerow({
-                        'file1': image_path1,
-                        'file2': image_path2,
+                        'file1': base_name1,
+                        'file2': base_name2,
                         'distance': len(good_matches),
                         'matches': [(m.queryIdx, m.trainIdx, m.distance) for m in good_matches]
                     })
@@ -167,17 +184,20 @@ class FragmentMatcher:
                     # Flush to ensure data is written to the file immediately
                     file.flush()
 
-    def run(self, success_csv='matches_v3.csv', debug=False):
+    def run(self, success_csv, debug=False):
         image_files = self.get_image_files()
         self.calculate_distances(image_files, success_csv, debug=debug)
         print(f"Results written to {success_csv}")
 
 if __name__ == "__main__":
-    from dotenv import load_dotenv
-
     load_dotenv()
-    DEBUG = os.getenv('DEBUG')
     base_path = os.getenv('BASE_PATH')
+    DEBUG = os.getenv('DEBUG')
+
     PATCHES_DIR = os.path.join(base_path, os.getenv('PATCHES_IN'))
-    matcher = FragmentMatcher(PATCHES_DIR)
-    matcher.run(success_csv='matches_v3.csv', debug=DEBUG)
+    patche_cache_dir = os.path.join(base_path, os.getenv('PATCHES_CACHE'))
+
+    matcher = FragmentMatcher(PATCHES_DIR, patche_cache_dir)
+
+    _sift_matches = os.path.join(base_path, os.getenv('SIFT_MATCHES'))
+    matcher.run(success_csv=_sift_matches, debug=DEBUG)

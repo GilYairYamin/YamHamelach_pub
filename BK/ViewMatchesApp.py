@@ -53,7 +53,7 @@ with col2:
         st.write(selected_match)
 
         # Display the corresponding image
-        image_path = os.path.join('match_visualizations', f'match_{match_selection}.png')
+        image_path = os.path.join('../match_visualizations', f'match_{match_selection}.png')
 
         if os.path.exists(image_path):
             st.write("### Match Visualization")

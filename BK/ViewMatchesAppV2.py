@@ -94,7 +94,7 @@ if selected_rows:
             match_id = selected_match['match_id']
 
             # Load and display the corresponding image
-            image_path = os.path.join('match_visualizations', f'match_{int(match_id)}.png')
+            image_path = os.path.join('../match_visualizations', f'match_{int(match_id)}.png')
             if os.path.exists(image_path):
                 st.image(image_path, caption=f"Match {match_id}")
             else:
