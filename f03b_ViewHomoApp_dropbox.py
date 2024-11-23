@@ -58,6 +58,7 @@ class DropboxHandler:
             raise
 
     def load_file(self, dropbox_path):
+        print(f" Loading file from Dropbox: {dropbox_path}...")
         try:
             _, res = self.dbx.files_download(dropbox_path)
             return BytesIO(res.content)
