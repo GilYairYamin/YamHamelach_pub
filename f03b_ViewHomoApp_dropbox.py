@@ -143,7 +143,7 @@ def visualize_match(row, base_path, image_path, patches_key_dec_cache, debug=Fal
                                  os.path.basename(file2).split('_')[1].split('.')[0])
 
     if patch1_info is None or patch2_info is None:
-        logger.error(f"Couldn't load patch info for one of the matches. Skipping...")
+        logger.error(f"Couldn't load patch info for one of the matches {patch1_info} - {patch2_info}. Skipping...")
         return
 
     file1_pathch_path = os.path.join(base_path, os.path.basename(file1).split('_')[0], file1)
