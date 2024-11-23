@@ -103,6 +103,36 @@ def load_keypoints(pkl_file_path):
         data = pickle.load(f)
     return data['keypoints']
 
+
+def get_patch_info_from_dropbox(dropbox_handler, base_path, file_name: str, box: str) -> dict:
+    """
+    Get patch information from a JSON file stored in Dropbox
+
+    Args:
+        dropbox_handler: DropboxHandler instance
+        file_name: Base name of the file
+        box: Box identifier from the filename
+
+    Returns:
+        dict: Patch information dictionary
+    """
+    try:
+        # Construct the Dropbox path to the JSON file
+        json_path = f"/{base_path}/{file_name}/{file_name}_patch_info.json"
+        logger.info(f"Loading patch info from {json_path}")
+
+        # Get the JSON file from Dropbox
+        json_bytes = dropbox_handler.load_file(json_path)
+
+        # Parse the JSON data
+        patch_info = json.load(json_bytes)
+
+        # Return the specific box information
+        return patch_info.get(box)
+    except Exception as e:
+        logger.error(f"Error loading patch info for {file_name}, box {box}: {e}")
+        return None
+
 # Function to get patch information from a JSON file
 def get_patch_info(base_path: str, file_name: str, box: str):
     json_file = os.path.join(base_path, file_name, f"{file_name}_patch_info.json")
@@ -137,11 +167,24 @@ def visualize_match(row, base_path, image_path, patches_key_dec_cache, debug=Fal
     # keypoints2 = load_keypoints(kp2)
 
     # Get patch information
-    patch1_info = get_patch_info(base_path, os.path.basename(file1).split('_')[0],
-                                 os.path.basename(file1).split('_')[1].split('.')[0])
-    patch2_info = get_patch_info(base_path, os.path.basename(file2).split('_')[0],
-                                 os.path.basename(file2).split('_')[1].split('.')[0])
+    # patch1_info = get_patch_info(base_path, os.path.basename(file1).split('_')[0],
+    #                              os.path.basename(file1).split('_')[1].split('.')[0])
+    # patch2_info = get_patch_info(base_path, os.path.basename(file2).split('_')[0],
+    #                              os.path.basename(file2).split('_')[1].split('.')[0])
+    # Get patch information using the new function
+    patch1_info = get_patch_info_from_dropbox(
+        dropbox_handler,
+        base_path,
+        os.path.basename(file1).split('_')[0],
+        os.path.basename(file1).split('_')[1].split('.')[0]
+    )
 
+    patch2_info = get_patch_info_from_dropbox(
+        dropbox_handler,
+        base_path,
+        os.path.basename(file2).split('_')[0],
+        os.path.basename(file2).split('_')[1].split('.')[0]
+    )
     if patch1_info is None or patch2_info is None:
         logger.error(f"Couldn't load patch info for one of the matches {patch1_info} - {patch2_info}. Skipping...")
         return
