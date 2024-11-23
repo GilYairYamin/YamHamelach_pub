@@ -13,6 +13,79 @@ from matplotlib.lines import Line2D
 import dropbox
 from io import BytesIO
 import streamlit as st
+from dropbox.exceptions import ApiError, AuthError
+import logging
+
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class DropboxHandler:
+    def __init__(self, access_token):
+        self.access_token = access_token
+        self._dbx = None
+
+    @property
+    def dbx(self):
+        if self._dbx is None:
+            try:
+                self._dbx = dropbox.Dropbox(self.access_token)
+                # Test the connection
+                self._dbx.users_get_current_account()
+            except AuthError as e:
+                st.error("Invalid Dropbox access token. Please check your credentials.")
+                logger.error(f"Dropbox authentication error: {e}")
+                raise
+            except Exception as e:
+                st.error("Error connecting to Dropbox.")
+                logger.error(f"Dropbox connection error: {e}")
+                raise
+        return self._dbx
+
+    def load_csv(self, dropbox_path):
+        try:
+            _, res = self.dbx.files_download(dropbox_path)
+            csv_file = BytesIO(res.content)
+            return pd.read_csv(csv_file)
+        except ApiError as e:
+            st.error(f"Error loading CSV from Dropbox: {dropbox_path}")
+            logger.error(f"Dropbox API error: {e}")
+            raise
+        except Exception as e:
+            st.error(f"Unexpected error loading CSV: {e}")
+            logger.error(f"Error loading CSV: {e}")
+            raise
+
+    def load_file(self, dropbox_path):
+        try:
+            _, res = self.dbx.files_download(dropbox_path)
+            return BytesIO(res.content)
+        except Exception as e:
+            logger.error(f"Error loading file from Dropbox: {e}")
+            raise
+
+def load_image_from_bytes(image_bytes: BytesIO):
+    try:
+        # Convert bytes to numpy array
+        nparr = np.frombuffer(image_bytes.getvalue(), np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is not None:
+            return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        else:
+            raise ValueError("Failed to decode image")
+    except Exception as e:
+        logger.error(f"Error loading image: {e}")
+        return None
+
+def load_keypoints_from_bytes(pkl_bytes: BytesIO):
+    try:
+        data = pickle.load(pkl_bytes)
+        return data['keypoints']
+    except Exception as e:
+        logger.error(f"Error loading keypoints: {e}")
+        raise
+
 
 # Function to load an image and convert to RGB for display
 def load_image(image_path: str):
@@ -47,16 +120,20 @@ def load_csv_from_dropbox(dbx, dropbox_path):
 
 # Function to visualize a match between two patches
 def visualize_match(row, base_path, image_path, patches_key_dec_cache, debug=False):
+    dropbox_handler = DropboxHandler(st.secrets["DROPBOX_ACCESS_TOKEN"])
+
     file1, file2 = row['file1'], row['file2']
     keypoints = row['matches']
     sorted_keypoints_matches = sorted(keypoints, key=lambda x: x[2], reverse=True)
 
     kp1 = os.path.join(patches_key_dec_cache, file1) + '.pkl'
     kp2 = os.path.join(patches_key_dec_cache, file2) + '.pkl'
+    keypoints1 = load_keypoints_from_bytes(dropbox_handler.load_file(kp1))
+    keypoints2 = load_keypoints_from_bytes(dropbox_handler.load_file(kp2))
 
-    # Load keypoints from pkl files
-    keypoints1 = load_keypoints(kp1)
-    keypoints2 = load_keypoints(kp2)
+    # # Load keypoints from pkl files
+    # keypoints1 = load_keypoints(kp1)
+    # keypoints2 = load_keypoints(kp2)
 
     # Get patch information
     patch1_info = get_patch_info(base_path, os.path.basename(file1).split('_')[0],
@@ -72,8 +149,10 @@ def visualize_match(row, base_path, image_path, patches_key_dec_cache, debug=Fal
     file2_pathch_path = os.path.join(base_path, os.path.basename(file2).split('_')[0], file2)
 
     # Load patch images
-    patch1 = load_image(file1_pathch_path)
-    patch2 = load_image(file2_pathch_path)
+    # patch1 = load_image(file1_pathch_path)
+    # patch2 = load_image(file2_pathch_path)
+    patch1 = load_image_from_bytes(dropbox_handler.load_file(file1_pathch_path))
+    patch2 = load_image_from_bytes(dropbox_handler.load_file(file2_pathch_path))
 
     if patch1 is None or patch2 is None:
         return
@@ -85,8 +164,10 @@ def visualize_match(row, base_path, image_path, patches_key_dec_cache, debug=Fal
     img1_path = os.path.join(image_path, img1_name)
     img2_path = os.path.join(image_path, img2_name)
 
-    img1 = load_image(img1_path)
-    img2 = load_image(img2_path)
+    # img1 = load_image(img1_path)
+    # img2 = load_image(img2_path)
+    img1 = load_image_from_bytes(dropbox_handler.load_file(img1_path))
+    img2 = load_image_from_bytes(dropbox_handler.load_file(img2_path))
 
     if img1 is None or img2 is None:
         return
@@ -181,12 +262,8 @@ def main():
 
     dbx = dropbox.Dropbox(DROPBOX_ACCESS_TOKEN)
 
-    dropbox_csv_path = os.getenv('DROPBOX_CSV_PATH')
     input_main_csv_file = "/output.csv"
-    # response = dbx.files_list_folder(path="")
-    # # Iterate over the entries and print file names
-    # for entry in response.entries:
-    #     print(entry.name)
+
 
     df = load_csv_from_dropbox(dbx, input_main_csv_file)
 
