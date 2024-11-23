@@ -5,3 +5,5 @@ opencv-python
 pandas
 tensorflow
 scikit-learn
+streamlit
+dropbox
