@@ -143,7 +143,7 @@ def visualize_match(row, base_path, image_path, patches_key_dec_cache, debug=Fal
                                  os.path.basename(file2).split('_')[1].split('.')[0])
 
     if patch1_info is None or patch2_info is None:
-        print(f"Couldn't load patch info for one of the matches. Skipping...")
+        logger.error(f"Couldn't load patch info for one of the matches. Skipping...")
         return
 
     file1_pathch_path = os.path.join(base_path, os.path.basename(file1).split('_')[0], file1)
@@ -156,6 +156,7 @@ def visualize_match(row, base_path, image_path, patches_key_dec_cache, debug=Fal
     patch2 = load_image_from_bytes(dropbox_handler.load_file(file2_pathch_path))
 
     if patch1 is None or patch2 is None:
+        logger.error(f"Couldn't patch1 and patch2...")
         return
 
     # Load original images
@@ -171,6 +172,7 @@ def visualize_match(row, base_path, image_path, patches_key_dec_cache, debug=Fal
     img2 = load_image_from_bytes(dropbox_handler.load_file(img2_path))
 
     if img1 is None or img2 is None:
+        logger.error(f"Couldn't img1 and img2...")
         return
 
     # Create a new figure with 4 subplots
