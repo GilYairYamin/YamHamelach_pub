@@ -12,6 +12,7 @@ import numpy as np
 from matplotlib.lines import Line2D
 import dropbox
 from io import BytesIO
+import streamlit as st
 
 # Function to load an image and convert to RGB for display
 def load_image(image_path: str):
@@ -174,7 +175,10 @@ def main():
     DEBUG = os.getenv('DEBUG', 'False').lower() in ['true', '1', 't']
 
     # Dropbox API setup
-    DROPBOX_ACCESS_TOKEN = os.getenv('DROPBOX_ACCESS_TOKEN')
+    #DROPBOX_ACCESS_TOKEN = os.getenv('DROPBOX_ACCESS_TOKEN')
+    DROPBOX_ACCESS_TOKEN = st.secrets["DROPBOX_ACCESS_TOKEN"]
+    base_path = st.secrets["BASE_PATH"]
+
     dbx = dropbox.Dropbox(DROPBOX_ACCESS_TOKEN)
 
     dropbox_csv_path = os.getenv('DROPBOX_CSV_PATH')
@@ -209,7 +213,6 @@ def main():
     st.write(f"**Match**: {row['Match']}")
 
     # Visualize selected match
-    base_path = os.getenv('BASE_PATH')
     IMAGES_IN_path = os.path.join(base_path, os.getenv('IMAGES_IN'))
     PATCHES_IN = os.path.join(base_path, os.getenv('PATCHES_IN'))
     patches_key_dec_cache = os.path.join(base_path, os.getenv('PATCHES_CACHE'))
