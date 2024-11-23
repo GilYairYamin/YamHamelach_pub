@@ -118,7 +118,7 @@ def get_patch_info_from_dropbox(dropbox_handler, base_path, file_name: str, box:
     """
     try:
         # Construct the Dropbox path to the JSON file
-        json_path = f"/{base_path}/{file_name}/{file_name}_patch_info.json"
+        json_path = f"{base_path}/{file_name}/{file_name}_patch_info.json"
         logger.info(f"Loading patch info from {json_path}")
 
         # Get the JSON file from Dropbox
