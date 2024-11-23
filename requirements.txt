@@ -7,3 +7,4 @@ tensorflow
 scikit-learn
 streamlit
 dropbox
+python-dotenv  # Optional but recommended for handling environment variables
