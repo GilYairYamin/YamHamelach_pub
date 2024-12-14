@@ -168,7 +168,6 @@ def main():
 
     # Define output filename * file with raw for each match
     input_main_csv_file = os.path.join(base_path, csv_sift_matches_w_tp_w_homo)
-    input_main_csv_file = "output.csv"
 
     if input_main_csv_file is not None:
         # Debug flag to visualize the first match automatically

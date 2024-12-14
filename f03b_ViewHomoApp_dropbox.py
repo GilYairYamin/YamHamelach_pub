@@ -301,8 +301,7 @@ def main():
     load_dotenv()
     DEBUG = os.getenv('DEBUG', 'False').lower() in ['true', '1', 't']
 
-    # Dropbox API setup
-    #DROPBOX_ACCESS_TOKEN = os.getenv('DROPBOX_ACCESS_TOKEN')
+    # Dropbox API setu
     DROPBOX_ACCESS_TOKEN = st.secrets["DROPBOX_ACCESS_TOKEN"]
     base_path = st.secrets["BASE_PATH"]
 
