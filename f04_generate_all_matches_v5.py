@@ -1,5 +1,6 @@
 import argparse
-import ast
+
+# import ast
 import json
 import os
 
@@ -171,9 +172,14 @@ def visualize_image_matches(
     else:
         avg_score = 0
     for idx, row in image_matches.iterrows():
-        file1, file2 = row["file1"], row["file2"]
-        distance = row["mean_homo_err"]
+        # file1, file2 = row["file1"], row["file2"]
+        file1, file2 = None, None
+        if row["file1"].startswith(img1_name.split(".")[0]):
+            file1, file2 = row["file1"], row["file2"]
+        else:
+            file1, file2 = row["file2"], row["file1"]
 
+        distance = row["mean_homo_err"]
         debugger.log_match_info(idx, file1, file2, distance)
 
         # Get patch information
@@ -294,22 +300,65 @@ def visualize_image_matches(
     plt.close()
 
 
+# def loop_images(
+#     csv_file: str,
+#     base_path: str,
+#     patches_path: str,
+#     image_path: str,
+#     output_dir: str,
+#     distance_threshold: float = 100,
+#     debug: bool = False,
+# ):
+#     image_pairs = set()
+#     i = 0
+#     for df in pd.read_csv(csv_file, chunksize=1000):
+#         i += 1
+#         # df["matches"] = df["matches"].apply(ast.literal_eval)
+
+#         for _, row in df.iterrows():
+#             img1 = os.path.basename(row["file1"]).split("_")[0] + ".jpg"
+#             img2 = os.path.basename(row["file2"]).split("_")[0] + ".jpg"
+#             if img1 != img2:
+#                 pair = tuple(sorted([img1, img2]))
+#                 image_pairs.add(pair)
+
+#         print(f"Found {len(image_pairs)} unique image pairs")
+#         for img1, img2 in image_pairs:
+#             print(f"Processing pair: {img1} - {img2}")
+#             visualize_image_matches(
+#                 img1,
+#                 img2,
+#                 df,
+#                 base_path,
+#                 patches_path,
+#                 image_path,
+#                 output_dir,
+#                 distance_threshold,
+#                 debug=debug,
+#             )
+#         print(f"finished chunck {i}")
+#     pass
+
+
 def main():
     # Load environment variables
     load_dotenv()
 
     # Get paths from environment variables
     base_path = os.getenv("BASE_PATH")
+    output_base = os.getenv("OUTPUT_BASE_PATH")
+
     image_path = os.path.join(base_path, os.getenv("IMAGES_IN"))
     patches_path = os.path.join(base_path, os.getenv("PATCHES_IN"))
     # patches_cache = os.path.join(base_path, os.getenv("PATCHES_CACHE"))
-    csv_file = os.path.join(base_path, os.getenv("SIFT_MATCHES_W_TP_W_HOMO"))
+
+    csv_file = os.path.join(base_path, os.getenv("CLEAN_SIFT_MATCHES_W_TP_W_HOMO"))
 
     # Setup argument parser for optional parameters
     parser = argparse.ArgumentParser(description="Visualize image matches")
     parser.add_argument(
         "--output_dir",
-        default=f"{base_path}/match_visualizations_5",
+        default=f"{output_base}/match_visualizations_5",
         help="Output directory for visualizations",
     )
 
@@ -319,8 +368,16 @@ def main():
         default=100,
         help="Distance threshold for filtering matches",
     )
-    parser.add_argument("--image1", help="Optional: specific first image to process")
-    parser.add_argument("--image2", help="Optional: specific second image to process")
+    parser.add_argument(
+        "--image1",
+        help="Optional: specific first image to process",
+        # default="M42970-1-E.jpg",
+    )
+    parser.add_argument(
+        "--image2",
+        help="Optional: specific second image to process",
+        # default="M43003-1-E.jpg",
+    )
 
     args = parser.parse_args()
 
@@ -328,8 +385,8 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
 
     # Read and process matches
-    df = pd.read_csv(csv_file)
-    df["matches"] = df["matches"].apply(ast.literal_eval)
+    df = pd.read_csv(csv_file, low_memory=False)
+    # df["matches"] = df["matches"].apply(ast.literal_eval)
 
     if args.image1 and args.image2:
         # Process specific image pair
@@ -342,6 +399,7 @@ def main():
             image_path,
             args.output_dir,
             args.distance_threshold,
+            debug=False,
         )
     else:
         # Process all unique image pairs
