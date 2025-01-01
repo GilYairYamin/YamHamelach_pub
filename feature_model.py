@@ -7,6 +7,9 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.tree import DecisionTreeClassifier
 from tensorflow.keras import optimizers
 
+data = None
+model_NN_weights = None
+
 data_df = pd.read_csv(data)
 n_features = data_df.shape[1] - 3
 
@@ -26,6 +29,7 @@ model_NN = keras.models.Sequential(
     )
 )
 
+
 if __name__ == "__main__":
     # model_NN.load_weights(model_NN_weights)
     model_NN.compile(
@@ -38,7 +42,7 @@ if __name__ == "__main__":
 
     df = pd.read_csv(data)
     features_columns = df.columns[:-3]
-    valid = np.isnan(df[features_columns]).any(axis=1) == False
+    valid = np.isnan(df[features_columns]).any(axis=1) is False
     print(f"data set shape is {df.shape}")
     df = df[valid]
     print(f"valid data set shape is {df.shape}")

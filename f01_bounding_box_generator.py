@@ -1,20 +1,22 @@
+import json
 import os
-from tqdm import tqdm
-import cv2
 from argparse import ArgumentParser
 from pathlib import Path
-from matplotlib import pyplot as plt
+
+import cv2
 import numpy as np
+from dotenv import load_dotenv
+from matplotlib import pyplot as plt
+from tqdm import tqdm
 from ultralytics import YOLO
-import json
 
 MODEL_INPUT_SHAPE = (640, 640)
-PATCH_CLS_NAME = 'patch'
+PATCH_CLS_NAME = "patch"
 
 
 def center(box, dtype=None):
-    l, t, r, b = box
-    center = np.array([(r + l) / 2, (b + t) / 2])
+    left, top, right, bottom = box
+    center = np.array([(right + left) / 2, (bottom + top) / 2])
     if dtype is not None:
         center = center.astype(dtype)
     return center
@@ -24,8 +26,8 @@ def center_radius(box):
     return np.linalg.norm(center(box))
 
 
-class PatchFinder():
-    def __init__(self,cp):
+class PatchFinder:
+    def __init__(self, cp):
         self._model = YOLO(cp)
         self._im_fn = None
         self.im = None
@@ -40,7 +42,9 @@ class PatchFinder():
             cols, rows = (32, 32)
             ids = np.arange(rows * cols)
             self._id_map = ids.reshape((cols, rows))
-            self._id_map = cv2.resize(self._id_map, self.im.shape[:2][::-1], interpolation=cv2.INTER_NEAREST)
+            self._id_map = cv2.resize(
+                self._id_map, self.im.shape[:2][::-1], interpolation=cv2.INTER_NEAREST
+            )
         return self._id_map
 
     def predict_bounding_box(self):
@@ -52,21 +56,21 @@ class PatchFinder():
 
         self._images = []
         extracted_boxes = []
-        for (i, box) in enumerate(boxes):
+        for i, box in enumerate(boxes):
             if names[cls[i]] != PATCH_CLS_NAME:
                 continue
-            l, t, r, b = box.xyxy.numpy()[0]
+            left, top, right, bottom = box.xyxy.numpy()[0]
             im_shape = self.im.shape
-            l = int(l / MODEL_INPUT_SHAPE[1] * im_shape[1])
-            r = int(r / MODEL_INPUT_SHAPE[1] * im_shape[1])
-            t = int(t / MODEL_INPUT_SHAPE[0] * im_shape[0])
-            b = int(b / MODEL_INPUT_SHAPE[0] * im_shape[0])
-            extracted_boxes.append([l, t, r, b])
+            left = int(left / MODEL_INPUT_SHAPE[1] * im_shape[1])
+            right = int(right / MODEL_INPUT_SHAPE[1] * im_shape[1])
+            top = int(top / MODEL_INPUT_SHAPE[0] * im_shape[0])
+            bottom = int(bottom / MODEL_INPUT_SHAPE[0] * im_shape[0])
+            extracted_boxes.append([left, top, right, bottom])
 
         self._extracted_boxes = sorted(extracted_boxes, key=center_radius)
 
-        for l, t, r, b in self._extracted_boxes:
-            self._images.append(self.im[t:b, l:r])
+        for left, top, right, bottom in self._extracted_boxes:
+            self._images.append(self.im[top:bottom, left:right])
 
     def load_image(self, fn):
         self._im_fn = fn
@@ -77,7 +81,7 @@ class PatchFinder():
     @property
     def tags(self):
         if self._tags == []:
-            for (i, box) in enumerate(self._extracted_boxes):
+            for i, box in enumerate(self._extracted_boxes):
                 center_x, center_y = center(box, dtype=np.uint(16))
                 tag = self.id_map[center_y][center_x]
                 if tag in self._tags:
@@ -88,67 +92,81 @@ class PatchFinder():
 
     def _generate_image_with_detection(self):
         im = np.array(self.im)
-        for (i, box) in enumerate(self._extracted_boxes):
-            (l, t, r, b) = box
+        for i, box in enumerate(self._extracted_boxes):
+            (left, top, right, bottom) = box
             c = np.random.randint(0, 125, 3)
-            im = cv2.rectangle(im, (l, t), (r, b), c.tolist(), 10)
+            im = cv2.rectangle(im, (left, top), (right, bottom), c.tolist(), 10)
             tag = self.tags[i]
-            im = cv2.putText(im, str(tag), (int((r + l) / 2), int((b + t) / 2)),
-                             cv2.FONT_HERSHEY_SIMPLEX, 2, c.tolist(), 5)
+            im = cv2.putText(
+                im,
+                str(tag),
+                (int((right + left) / 2), int((bottom + top) / 2)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                2,
+                c.tolist(),
+                5,
+            )
         return im
 
     def show_image(self):
-        im = self._generate_image_with_detection()
-        plt.imshow(im)
+        img = self._generate_image_with_detection()
+        plt.imshow(img)
         plt.show()
 
     def save_image(self, fn):
         os.makedirs(fn.parent, exist_ok=True)
-        im = self._generate_image_with_detection()
-        plt.imsave(fn, im)
+        img = self._generate_image_with_detection()
+        plt.imsave(fn, img)
 
     def save_patches(self, path):
         os.makedirs(path, exist_ok=True)
-        im = np.array(self.im)
-        for (i, box) in enumerate(self._extracted_boxes):
-            (l, t, r, b) = box
-            patch = im[t:b, l:r]
+        img = np.array(self.im)
+        for i, box in enumerate(self._extracted_boxes):
+            (left, top, right, bottom) = box
+            patch = img[top:bottom, left:right]
             tag = self.tags[i]
-            fn = Path(path, f"{Path(self._im_fn).stem}_{tag}").with_suffix(".jpg")
-            plt.imsave(fn, patch)
+            filename = Path(path, f"{Path(self._im_fn).stem}_{tag}").with_suffix(".jpg")
+            plt.imsave(filename, patch)
 
             # Store patch information
             self._patch_info[str(tag)] = {
-                "filename": fn.name,
-                "coordinates": [l, t, r, b]
+                "filename": filename.name,
+                "coordinates": [left, top, right, bottom],
             }
 
     def save_patch_info(self, path):
         info_file = Path(path, f"{Path(self._im_fn).stem}_patch_info.json")
-        with open(info_file, 'w') as f:
-            json.dump(self._patch_info, f, indent=2)
+        with open(info_file, "w") as file:
+            json.dump(self._patch_info, file, indent=2)
 
-
-from dotenv import load_dotenv
-import os
 
 # Load the .env file
 load_dotenv()
-base_path = os.getenv('BASE_PATH')
+base_path = os.getenv("BASE_PATH")
 
 
-IMAGES_IN = os.path.join(base_path, os.getenv('IMAGES_IN'))
-PATCHES_DIR = os.path.join(base_path, os.getenv('PATCHES_IN'))
-BBOX_DIR = os.path.join(base_path, os.getenv('BBOXES_IN'))
-MODEL_NN_WEIGHTS = os.path.join(base_path, os.getenv('MODEL_NN_WEIGHTS'))
+IMAGES_IN = os.path.join(base_path, os.getenv("IMAGES_IN"))
+PATCHES_DIR = os.path.join(base_path, os.getenv("PATCHES_IN"))
+BBOX_DIR = os.path.join(base_path, os.getenv("BBOXES_IN"))
+MODEL_NN_WEIGHTS = os.path.join(base_path, os.getenv("MODEL_NN_WEIGHTS"))
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--im_path", help="paths to input images containing multiple patches", default=IMAGES_IN)
-    parser.add_argument('--patches_dir', help="path to save images with bounding boxes and patches crops", default=PATCHES_DIR)
-    parser.add_argument('--bbox_dir', help="path to save bounding box images", default=BBOX_DIR)
+    parser.add_argument(
+        "--im_path",
+        help="paths to input images containing multiple patches",
+        default=IMAGES_IN,
+    )
+    parser.add_argument(
+        "--patches_dir",
+        help="path to save images with bounding boxes and patches crops",
+        default=PATCHES_DIR,
+    )
+    parser.add_argument(
+        "--bbox_dir", help="path to save bounding box images", default=BBOX_DIR
+    )
 
-    parser.add_argument('--cp', help="yolov8 cp path", default=MODEL_NN_WEIGHTS)
+    parser.add_argument("--cp", help="yolov8 cp path", default=MODEL_NN_WEIGHTS)
     args = parser.parse_args()
 
     im_path = args.im_path
@@ -158,21 +176,20 @@ if __name__ == "__main__":
     bbox_dir = args.bbox_dir
     os.makedirs(bbox_dir, exist_ok=True)
 
-
     patch_finder = PatchFinder(args.cp)
     paths = list(Path(im_path).glob("*.jpg"))
-    pbar = tqdm(paths, desc='Processing images')
+    pbar = tqdm(paths, desc="Processing images")
 
-    for (i, im_fn) in enumerate(pbar):
-        pbar.set_description(f"{im_fn} {i + 1}/{len(paths)}")
-        patch_finder.load_image(str(im_fn))
+    for i, img_filename in enumerate(pbar):
+        pbar.set_description(f"{img_filename} {i + 1}/{len(paths)}")
+        patch_finder.load_image(str(img_filename))
         patch_finder.predict_bounding_box()
 
-        fn = Path(BBOX_DIR , im_fn.name)
-        patch_finder.save_image(fn)
+        filename = Path(BBOX_DIR, img_filename.name)
+        patch_finder.save_image(filename)
 
-        fp = Path(PATCHES_DIR,  im_fn.stem)
-        patch_finder.save_patches(fp)
+        filepath = Path(PATCHES_DIR, img_filename.stem)
+        patch_finder.save_patches(filepath)
 
         # Save patch information
-        patch_finder.save_patch_info(fp)
+        patch_finder.save_patch_info(filepath)

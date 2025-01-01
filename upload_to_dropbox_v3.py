@@ -9,9 +9,9 @@ from typing import Optional
 load_dotenv()
 
 # Dropbox API setup
-DROPBOX_ACCESS_TOKEN = os.getenv('DROPBOX_ACCESS_TOKEN')
-APP_KEY = os.getenv('DROPBOX_APP_KEY', None)
-APP_SECRET = os.getenv('DROPBOX_APP_SECRET', None)
+DROPBOX_ACCESS_TOKEN = os.getenv("DROPBOX_ACCESS_TOKEN")
+APP_KEY = os.getenv("DROPBOX_APP_KEY", None)
+APP_SECRET = os.getenv("DROPBOX_APP_SECRET", None)
 
 
 class DropboxUploader:
@@ -33,19 +33,21 @@ class DropboxUploader:
             # Test the connection
             self.dbx.users_get_current_account()
         except AuthError as e:
-            if 'expired_access_token' in str(e):
+            if "expired_access_token" in str(e):
                 if self.app_key and self.app_secret:
                     print("Access token expired. Getting new tokens...")
                     self._get_new_tokens()
                 else:
-                    raise Exception("Access token expired and app credentials not available. "
-                                    "Please provide app_key and app_secret.")
+                    raise Exception(
+                        "Access token expired and app credentials not available. "
+                        "Please provide app_key and app_secret."
+                    )
 
     def _get_new_tokens(self):
         """Get new tokens through OAuth flow"""
         try:
             tokens = self.get_initial_tokens(self.app_key, self.app_secret)
-            self.access_token = tokens['access_token']
+            self.access_token = tokens["access_token"]
             self.initialize_client()
             print("Successfully obtained new access token")
         except Exception as e:
@@ -55,9 +57,7 @@ class DropboxUploader:
     def get_initial_tokens(app_key, app_secret):
         """Get initial access and refresh tokens through OAuth flow"""
         auth_flow = dropbox.oauth.DropboxOAuth2FlowNoRedirect(
-            app_key,
-            app_secret,
-            token_access_type='offline'
+            app_key, app_secret, token_access_type="offline"
         )
 
         # 1. Get authorization URL
@@ -73,8 +73,8 @@ class DropboxUploader:
             # 3. Exchange auth code for tokens
             oauth_result = auth_flow.finish(auth_code)
             return {
-                'access_token': oauth_result.access_token,
-                'refresh_token': oauth_result.refresh_token
+                "access_token": oauth_result.access_token,
+                "refresh_token": oauth_result.refresh_token,
             }
         except Exception as e:
             raise Exception(f"Failed to get tokens: {str(e)}")
@@ -98,24 +98,28 @@ class DropboxUploader:
 
         def _upload():
             if not self.is_valid_dropbox_path(dropbox_path, check_existence=False):
-                print(f"Invalid Dropbox path or insufficient permissions: {dropbox_path}")
+                print(
+                    f"Invalid Dropbox path or insufficient permissions: {dropbox_path}"
+                )
                 return False
 
             if self.file_exists_in_dropbox(dropbox_path):
                 print(f"File already exists, skipping: {dropbox_path}")
                 return True
 
-            with open(local_path, 'rb') as f:
+            with open(local_path, "rb") as f:
                 file_size = os.path.getsize(local_path)
                 CHUNK_SIZE = 4 * 1024 * 1024
 
                 if file_size <= CHUNK_SIZE:
                     self.dbx.files_upload(f.read(), dropbox_path)
                 else:
-                    upload_session_start_result = self.dbx.files_upload_session_start(f.read(CHUNK_SIZE))
+                    upload_session_start_result = self.dbx.files_upload_session_start(
+                        f.read(CHUNK_SIZE)
+                    )
                     cursor = dropbox.files.UploadSessionCursor(
                         session_id=upload_session_start_result.session_id,
-                        offset=f.tell()
+                        offset=f.tell(),
                     )
                     commit = dropbox.files.CommitInfo(path=dropbox_path)
 
@@ -147,13 +151,18 @@ class DropboxUploader:
             successful_uploads = 0
             failed_uploads = 0
 
-            for local_path in local_dir_path.rglob('*'):
+            for local_path in local_dir_path.rglob("*"):
                 if local_path.is_file():
-                    if local_path.name.startswith('.') or local_path.name == ".DS_Store":
+                    if (
+                        local_path.name.startswith(".")
+                        or local_path.name == ".DS_Store"
+                    ):
                         continue
 
                     relative_path = local_path.relative_to(local_dir_path)
-                    dropbox_path = f"{dropbox_base_path}/{relative_path}".replace('\\', '/')
+                    dropbox_path = f"{dropbox_base_path}/{relative_path}".replace(
+                        "\\", "/"
+                    )
 
                     if self.upload_file(str(local_path), dropbox_path):
                         successful_uploads += 1
@@ -184,11 +193,15 @@ class DropboxUploader:
 
         def _copy_file():
             if not self.is_valid_dropbox_path(from_path):
-                print(f"Invalid Dropbox source path or insufficient permissions: {from_path}")
+                print(
+                    f"Invalid Dropbox source path or insufficient permissions: {from_path}"
+                )
                 return
 
             if not self.is_valid_dropbox_path(to_path, check_existence=False):
-                print(f"Invalid Dropbox destination path or insufficient permissions: {os.path.dirname(to_path)}")
+                print(
+                    f"Invalid Dropbox destination path or insufficient permissions: {os.path.dirname(to_path)}"
+                )
                 return
 
             if self.file_exists_in_dropbox(to_path):
@@ -200,7 +213,9 @@ class DropboxUploader:
 
         return self.execute_with_retry(_copy_file)
 
-    def copy_directory_within_dropbox(self, from_folder, to_folder , only_sub_folder=None):
+    def copy_directory_within_dropbox(
+        self, from_folder, to_folder, only_sub_folder=None
+    ):
         """Copy directory within Dropbox with retry logic."""
 
         def _copy_directory():
@@ -208,8 +223,10 @@ class DropboxUploader:
 
             def process_entries(entries):
                 for entry in entries:
-                    relative_path = entry.path_display[len(from_folder):].lstrip("/")
-                    if ((only_sub_folder is not None) and (only_sub_folder not in relative_path)):
+                    relative_path = entry.path_display[len(from_folder) :].lstrip("/")
+                    if (only_sub_folder is not None) and (
+                        only_sub_folder not in relative_path
+                    ):
                         continue
 
                     if len(relative_path) == 0:
@@ -268,16 +285,14 @@ class DropboxUploader:
 def main():
     # Initialize uploader with access token and app credentials
     uploader = DropboxUploader(
-        access_token=DROPBOX_ACCESS_TOKEN,
-        app_key=APP_KEY,
-        app_secret=APP_SECRET
+        access_token=DROPBOX_ACCESS_TOKEN, app_key=APP_KEY, app_secret=APP_SECRET
     )
 
     # Example usage: Copy a directory within Dropbox
     from_folder = "/YamHamelach_data_n_model/"
     to_folder = "/Apps/YamHamelach"
     only_sub_folder = "patches_key_dec_cache"
-    uploader.copy_directory_within_dropbox(from_folder, to_folder , only_sub_folder)
+    uploader.copy_directory_within_dropbox(from_folder, to_folder, only_sub_folder)
 
 
 if __name__ == "__main__":

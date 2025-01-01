@@ -1,12 +1,13 @@
 import os
-import dropbox
 from pathlib import Path
+
+import dropbox
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # Dropbox API setup
-DROPBOX_ACCESS_TOKEN = os.getenv('DROPBOX_ACCESS_TOKEN')
+DROPBOX_ACCESS_TOKEN = os.getenv("DROPBOX_ACCESS_TOKEN")
 
 
 class DropboxUploader:
@@ -21,7 +22,7 @@ class DropboxUploader:
             return False
 
         try:
-            with open(local_path, 'rb') as f:
+            with open(local_path, "rb") as f:
                 # Use chunks for larger files
                 file_size = os.path.getsize(local_path)
                 CHUNK_SIZE = 4 * 1024 * 1024  # 4MB chunks
@@ -31,10 +32,12 @@ class DropboxUploader:
                     self.dbx.files_upload(f.read(), dropbox_path)
                 else:
                     # Large file, upload in chunks
-                    upload_session_start_result = self.dbx.files_upload_session_start(f.read(CHUNK_SIZE))
+                    upload_session_start_result = self.dbx.files_upload_session_start(
+                        f.read(CHUNK_SIZE)
+                    )
                     cursor = dropbox.files.UploadSessionCursor(
                         session_id=upload_session_start_result.session_id,
-                        offset=f.tell()
+                        offset=f.tell(),
                     )
                     commit = dropbox.files.CommitInfo(path=dropbox_path)
 
@@ -62,15 +65,15 @@ class DropboxUploader:
         failed_uploads = 0
 
         # Walk through the directory
-        for local_path in local_dir.rglob('*'):
+        for local_path in local_dir.rglob("*"):
             if local_path.is_file():
                 # Skip system files like .DS_Store
-                if local_path.name.startswith('.') or local_path.name == ".DS_Store":
+                if local_path.name.startswith(".") or local_path.name == ".DS_Store":
                     continue
 
                 # Calculate relative path for Dropbox
                 relative_path = local_path.relative_to(local_dir)
-                dropbox_path = f"{dropbox_base_path}/{relative_path}".replace('\\', '/')
+                dropbox_path = f"{dropbox_base_path}/{relative_path}".replace("\\", "/")
 
                 # Upload the file
                 if self.upload_file(str(local_path), dropbox_path):
@@ -94,11 +97,15 @@ class DropboxUploader:
     def copy_file_within_dropbox(self, from_path, to_path):
         """Copy a file within Dropbox from one location to another, with path validation."""
         if not self.is_valid_dropbox_path(from_path):
-            print(f"Invalid Dropbox source path or insufficient permissions: {from_path}")
+            print(
+                f"Invalid Dropbox source path or insufficient permissions: {from_path}"
+            )
             return
 
-        if not self.is_valid_dropbox_path(to_path , check_existence=False):
-            print(f"Invalid Dropbox destination path or insufficient permissions: {os.path.dirname(to_path)}")
+        if not self.is_valid_dropbox_path(to_path, check_existence=False):
+            print(
+                f"Invalid Dropbox destination path or insufficient permissions: {os.path.dirname(to_path)}"
+            )
             return
 
         try:
@@ -106,7 +113,6 @@ class DropboxUploader:
             print(f"Copied {from_path} to {to_path}")
         except dropbox.exceptions.ApiError as e:
             print(f"Failed to copy {from_path} to {to_path}: {str(e)}")
-
 
     def list_all_files_within_dropbox(self, folder_path):
         """List all files within a Dropbox folder and process them recursively."""
@@ -137,16 +143,17 @@ class DropboxUploader:
         except dropbox.exceptions.ApiError as e:
             print(f"Failed to list files in folder {folder_path}: {str(e)}")
             return []
+
     def copy_directory_within_dropbox(self, from_folder, to_folder):
         """Recursively copy an entire directory structure from one location to another within Dropbox."""
         try:
             # List all entries in the source directory, recursively
-            #result = self.dbx.files_list_folder(from_folder, recursive=True)
+            # result = self.dbx.files_list_folder(from_folder, recursive=True)
             result = self.list_all_files_within_dropbox(from_folder)
             for entry in result.entries:
                 # Calculate the relative path and the destination path
-                relative_path = entry.path_display[len(from_folder):].lstrip("/")
-                if (len(relative_path) == 0):
+                relative_path = entry.path_display[len(from_folder) :].lstrip("/")
+                if len(relative_path) == 0:
                     continue
                 dest_path = f"{to_folder}/{relative_path}"
 
@@ -209,19 +216,20 @@ def main():
     from_folder = "/YamHamelach_data_n_model/"
     dropbox_path = "/Apps/YamHamelach"
 
-    successful, failed = uploader.copy_directory_within_dropbox(from_folder, dropbox_path)
+    successful, failed = uploader.copy_directory_within_dropbox(
+        from_folder, dropbox_path
+    )
 
-    print(f"\nUpload complete!")
+    print("\nUpload complete!")
     print(f"Successfully uploaded: {successful} files")
     print(f"Failed uploads: {failed} files")
 
-import dropbox
 
 def test_permissions(access_token):
     try:
         dbx = dropbox.Dropbox(access_token)
         # Test metadata read
-        files = dbx.files_list_folder('')
+        files = dbx.files_list_folder("")
         print("Successfully listed files!")
         # Test file content read
         for entry in files.entries[:1]:
@@ -234,11 +242,12 @@ def test_permissions(access_token):
         print(f"Auth Error: {e}")
         return False
 
-def list_all_files(dbx):
 
-    files = dbx.files_list_folder('/YamHamelach_data_n_model', recursive=True)
+def list_all_files(dbx):
+    files = dbx.files_list_folder("/YamHamelach_data_n_model", recursive=True)
     for entry in files.entries:
         print(entry.name)
+
 
 def test_dropbox_access(access_token):
     try:

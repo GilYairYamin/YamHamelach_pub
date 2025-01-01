@@ -19,11 +19,11 @@ np.random.seed(datetime.now().microsecond)
 def setup_environment():
     """Load environment variables and set up paths."""
     load_dotenv()
-    base_path = os.getenv('BASE_PATH')
+    base_path = os.getenv("BASE_PATH")
 
-    CSV_IN = os.path.join(base_path, os.getenv('CSV_IN'))
-    PATCHES_IN = os.path.join(base_path, os.getenv('PATCHES_IN'))
-    PAIRS_OUT = os.path.join(base_path, os.getenv('PAIRS_OUT'))
+    CSV_IN = os.path.join(base_path, os.getenv("CSV_IN"))
+    PATCHES_IN = os.path.join(base_path, os.getenv("PATCHES_IN"))
+    PAIRS_OUT = os.path.join(base_path, os.getenv("PAIRS_OUT"))
 
     print(f"CSV_IN: {CSV_IN}")
     print(f"PATCHES_IN: {PATCHES_IN}")
@@ -36,10 +36,10 @@ def print_unique_file_names(csv_file_path):
     """Print unique file names from a CSV file."""
     unique_files = set()
 
-    with open(csv_file_path, mode='r', encoding='utf-8-sig') as file:
+    with open(csv_file_path, mode="r", encoding="utf-8-sig") as file:
         csv_reader = csv.DictReader(file)
         for row in csv_reader:
-            file_name = row['File']
+            file_name = row["File"]
             unique_files.add(file_name)
 
     print("Unique file names:")
@@ -100,14 +100,14 @@ def parse_arguments():
     # Load environment variables if arguments are not provided
     if not args.patches_in or not args.csv_fn or not args.pairs_out:
         load_dotenv()
-        base_path = os.getenv('BASE_PATH')
+        base_path = os.getenv("BASE_PATH")
 
         if not args.csv_fn:
-            args.csv_fn = os.path.join(base_path, os.getenv('CSV_IN'))
+            args.csv_fn = os.path.join(base_path, os.getenv("CSV_IN"))
         if not args.patches_in:
-            args.patches_in = os.path.join(base_path, os.getenv('PATCHES_IN'))
+            args.patches_in = os.path.join(base_path, os.getenv("PATCHES_IN"))
         if not args.pairs_out:
-            args.pairs_out = os.path.join(base_path, os.getenv('PAIRS_OUT'))
+            args.pairs_out = os.path.join(base_path, os.getenv("PAIRS_OUT"))
 
     # Validate paths
     if not os.path.isfile(args.csv_fn):
@@ -123,8 +123,8 @@ def parse_arguments():
 def setup_output_file(pairs_out_path):
     """Set up the output CSV file for match results."""
     results_csv_path = Path(pairs_out_path, "matching_results.csv")
-    csvfile = open(results_csv_path, 'w', newline='')
-    fieldnames = ['file1', 'file2', 'match_status']
+    csvfile = open(results_csv_path, "w", newline="")
+    fieldnames = ["file1", "file2", "match_status"]
     csv_writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
     csv_writer.writeheader()
     return csv_writer, csvfile
@@ -139,7 +139,9 @@ def get_patch_paths(patches_in_path, pam_list):
     return patch_paths
 
 
-def process_file_pair(fn_1, fn_2, csv_matcher, csv_writer, save_figures, pairs_out_path):
+def process_file_pair(
+    fn_1, fn_2, csv_matcher, csv_writer, save_figures, pairs_out_path
+):
     """Process a pair of files and write the result."""
     csv_match = csv_matcher.is_match(fn_1, fn_2)
     file_name = f"{fn_1.stem}-{fn_2.stem}.jpg"
@@ -155,11 +157,9 @@ def process_file_pair(fn_1, fn_2, csv_matcher, csv_writer, save_figures, pairs_o
 
     if match_status:
         # Write the result to CSV
-        csv_writer.writerow({
-            'file1': fn_1.name,
-            'file2': fn_2.name,
-            'match_status': match_status
-        })
+        csv_writer.writerow(
+            {"file1": fn_1.name, "file2": fn_2.name, "match_status": match_status}
+        )
 
         if save_figures:
             # Save matched images if needed
@@ -204,14 +204,18 @@ def main():
             if args.verbose:
                 print(f"Processing file {i+1}/{len(patch_paths)}: {fn_1.name}")
             pbar.update(1)
-            for fn_2 in patch_paths[i+1:]:
+            for fn_2 in patch_paths[i + 1 :]:
                 process_file_pair(
-                    fn_1, fn_2, csv_matcher, csv_writer,
-                    args.save_figures, args.pairs_out
+                    fn_1,
+                    fn_2,
+                    csv_matcher,
+                    csv_writer,
+                    args.save_figures,
+                    args.pairs_out,
                 )
 
     csvfile.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
