@@ -6,6 +6,7 @@ from typing import List, Tuple
 
 import cv2
 import numpy as np
+from dotenv import load_dotenv
 from tqdm import tqdm
 
 from f02_SIFT_macher import DescriptorCacheManager, NaiveImageMatcher
@@ -138,8 +139,6 @@ def read_image_pairs_from_csv(csv_file: str):
 
 # Example usage
 if __name__ == "__main__":
-    from dotenv import load_dotenv
-
     load_dotenv()
     DEBUG = os.getenv("DEBUG")
     base_path = os.getenv("BASE_PATH")

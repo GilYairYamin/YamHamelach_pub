@@ -9,13 +9,13 @@ rng = 0
 validate = True
 
 # Specify the save directory for training runs
-save_dir = '/home/avinoam/workspace/YAM_HAMELACH/weights/'
+save_dir = "/home/avinoam/workspace/YAM_HAMELACH/weights/"
 os.makedirs(save_dir, exist_ok=True)
 
 # specify your data path
-data_path = '/home/avinoam/workspace/YAM_HAMELACH/dataset/labeled/data.yaml'
+data_path = "/home/avinoam/workspace/YAM_HAMELACH/dataset/labeled/data.yaml"
 
-model = YOLO('yolov8m.pt')
+model = YOLO("yolov8m.pt")
 # load pretrained model
 cp = "/home/avinoam/workspace/YAM_HAMELACH/weights/train7/weights/best.pt"
 # model.load(cp)
@@ -31,5 +31,5 @@ results = model.train(
     seed=rng,
     val=validate,
     save_dir=save_dir,
-    project= '/home/avinoam/workspace/YAM_HAMELACH/weights'
+    project="/home/avinoam/workspace/YAM_HAMELACH/weights",
 )

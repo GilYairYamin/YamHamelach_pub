@@ -221,9 +221,9 @@ class FragmentMatcher:
 
 if __name__ == "__main__":
     load_dotenv()
+
     base_path = os.getenv("BASE_PATH")
     DEBUG = os.getenv("DEBUG")
-
     PATCHES_DIR = os.path.join(base_path, os.getenv("PATCHES_IN"))
     patche_cache_dir = os.path.join(base_path, os.getenv("PATCHES_CACHE"))
 

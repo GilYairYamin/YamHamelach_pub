@@ -48,8 +48,8 @@ class PatchFinder:
         return self._id_map
 
     def predict_bounding_box(self):
-        im = cv2.resize(self.im, MODEL_INPUT_SHAPE)
-        results = self._model.predict([im], verbose=False)
+        img = cv2.resize(self.im, MODEL_INPUT_SHAPE)
+        results = self._model.predict([img], verbose=False)
         names = results[0].names
         boxes = results[0].boxes
         cls = boxes.cls.numpy()

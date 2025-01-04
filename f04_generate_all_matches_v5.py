@@ -1,10 +1,7 @@
 import argparse
-
-# import ast
 import json
 import os
-
-# import pickle
+from types import SimpleNamespace
 from typing import Dict, List, Tuple
 
 import cv2
@@ -101,6 +98,87 @@ def normalize_coordinates(coords, width, height, is_vertical):
         return (coords[0] / width, coords[1] / height)
 
 
+def create_result_img_figure(img1, img2, img1_name, img2_name):
+    # Determine image orientations
+
+    img1_shape = img1.shape[:2]
+    img2_shape = img2.shape[:2]
+
+    is_img1_vertical = img1_shape[0] > img1_shape[1]
+    is_img2_vertical = img2_shape[0] > img2_shape[1]
+
+    # Create figure with adaptive size based on orientations
+    fig = None
+    if is_img1_vertical and is_img2_vertical:
+        fig = plt.figure(figsize=(12, 16))
+    elif not is_img1_vertical and not is_img2_vertical:
+        fig = plt.figure(figsize=(20, 8))
+    else:
+        fig = plt.figure(figsize=(16, 12))
+
+    img1_width_ratio = img1_shape[1] / max(img1_shape[1], img1_shape[0])
+    img2_width_ratio = img2_shape[1] / max(img2_shape[1], img2_shape[0])
+
+    gs = plt.GridSpec(
+        1, 2, width_ratios=[img1_width_ratio, img2_width_ratio], figure=fig
+    )
+
+    ax1 = fig.add_subplot(gs[0])
+    ax2 = fig.add_subplot(gs[1])
+
+    ax1.set_title(f"Image 1: {img1_name}", fontsize=12)
+    ax2.set_title(f"Image 2: {img2_name}", fontsize=12)
+
+    # Display images
+    ax1.imshow(img1)
+    ax2.imshow(img2)
+    ax1.set_aspect("equal")
+    ax2.set_aspect("equal")
+
+    return fig, ax1, ax2, img1_shape, img2_shape, is_img1_vertical, is_img2_vertical
+
+
+def get_image_patches(
+    matches_df: pd.DataFrame,
+    img1_name: str,
+    img2_name: str,
+    distance_threshold: int,
+    match_metric: str = "mean_homo_err",
+):
+    image_matches = matches_df[
+        (
+            (matches_df["file1"].str.startswith(img1_name.split(".")[0]))
+            & (matches_df["file2"].str.startswith(img2_name.split(".")[0]))
+        )
+        | (
+            (matches_df["file2"].str.startswith(img1_name.split(".")[0]))
+            & (matches_df["file1"].str.startswith(img2_name.split(".")[0]))
+        )
+    ]
+
+    image_matches = image_matches[image_matches[match_metric] <= distance_threshold]
+    match_scores = image_matches[match_metric].tolist()
+
+    return image_matches, match_scores
+
+
+def get_patches_info(row, img1_name, patches_path):
+    file1, file2 = row["file1"], row["file2"]
+    if row["file2"].startswith(img1_name.split(".")[0]):
+        file1, file2 = file2, file1
+
+    # Get patch information
+    patch1_name = os.path.basename(file1).split("_")[0]
+    patch2_name = os.path.basename(file2).split("_")[0]
+    patch1_box = os.path.basename(file1).split("_")[1].split(".")[0]
+    patch2_box = os.path.basename(file2).split("_")[1].split(".")[0]
+
+    patch1_info = get_patch_info(patches_path, patch1_name, patch1_box)
+    patch2_info = get_patch_info(patches_path, patch2_name, patch2_box)
+
+    return patch1_info, patch2_info
+
+
 def visualize_image_matches(
     img1_name: str,
     img2_name: str,
@@ -110,6 +188,7 @@ def visualize_image_matches(
     image_path: str,
     output_dir: str,
     distance_threshold: float = 100,
+    match_metric: str = "mean_homo_err",
     debug: bool = False,
 ):
     # Initialize debugger
@@ -124,72 +203,27 @@ def visualize_image_matches(
 
     debugger.log_image_info(img1_name, img2_name, img1, img2)
 
-    # Determine image orientations
-    h1, w1 = img1.shape[:2]
-    h2, w2 = img2.shape[:2]
-    is_vertical1 = h1 > w1
-    is_vertical2 = h2 > w2
-
-    # Create figure with adaptive size based on orientations
-    if is_vertical1 and is_vertical2:
-        fig = plt.figure(figsize=(12, 16))
-    elif not is_vertical1 and not is_vertical2:
-        fig = plt.figure(figsize=(20, 8))
-    else:
-        fig = plt.figure(figsize=(16, 12))
-
-    gs = plt.GridSpec(
-        1, 2, width_ratios=[w1 / max(w1, h1), w2 / max(w2, h2)], figure=fig
+    fig, ax1, ax2, img1_shape, img2_shape, is_img1_vertical, is_img2_vertical = (
+        create_result_img_figure(img1, img2, img1_name, img2_name)
     )
-    ax1 = fig.add_subplot(gs[0])
-    ax2 = fig.add_subplot(gs[1])
 
-    # Display images
-    ax1.imshow(img1)
-    ax2.imshow(img2)
-    ax1.set_aspect("equal")
-    ax2.set_aspect("equal")
+    image_matches, match_scores = get_image_patches(
+        matches_df, img1_name, img2_name, distance_threshold
+    )
 
     # Process matches
-    image_matches = matches_df[
-        (
-            (matches_df["file1"].str.startswith(img1_name.split(".")[0]))
-            & (matches_df["file2"].str.startswith(img2_name.split(".")[0]))
-        )
-        | (
-            (matches_df["file2"].str.startswith(img1_name.split(".")[0]))
-            & (matches_df["file1"].str.startswith(img2_name.split(".")[0]))
-        )
-    ]
-
-    image_matches = image_matches[image_matches["mean_homo_err"] <= distance_threshold]
-    match_scores = image_matches["mean_homo_err"].tolist()
-
     if match_scores:
         # Take up to first 4 scores
         scores_to_average = match_scores[: min(4, len(match_scores))]
         avg_score = round(sum(scores_to_average) / len(scores_to_average))
     else:
         avg_score = 0
+
     for idx, row in image_matches.iterrows():
-        # file1, file2 = row["file1"], row["file2"]
-        file1, file2 = None, None
-        if row["file1"].startswith(img1_name.split(".")[0]):
-            file1, file2 = row["file1"], row["file2"]
-        else:
-            file1, file2 = row["file2"], row["file1"]
+        distance = row[match_metric]
+        debugger.log_match_info(idx, img1_name, img2_name, distance)
 
-        distance = row["mean_homo_err"]
-        debugger.log_match_info(idx, file1, file2, distance)
-
-        # Get patch information
-        patch1_name = os.path.basename(file1).split("_")[0]
-        patch2_name = os.path.basename(file2).split("_")[0]
-        patch1_box = os.path.basename(file1).split("_")[1].split(".")[0]
-        patch2_box = os.path.basename(file2).split("_")[1].split(".")[0]
-
-        patch1_info = get_patch_info(patches_path, patch1_name, patch1_box)
-        patch2_info = get_patch_info(patches_path, patch2_name, patch2_box)
+        patch1_info, patch2_info = get_patches_info(row, img1_name, patches_path)
 
         if patch1_info is None or patch2_info is None:
             continue
@@ -204,6 +238,7 @@ def visualize_image_matches(
                 3,
             )
         )
+
         rect1 = Rectangle(
             (patch1_info["coordinates"][0], patch1_info["coordinates"][1]),
             patch1_info["coordinates"][2] - patch1_info["coordinates"][0],
@@ -212,6 +247,7 @@ def visualize_image_matches(
             edgecolor=color,
             linewidth=1,
         )
+
         rect2 = Rectangle(
             (patch2_info["coordinates"][0], patch2_info["coordinates"][1]),
             patch2_info["coordinates"][2] - patch2_info["coordinates"][0],
@@ -232,10 +268,10 @@ def visualize_image_matches(
 
         # Transform to normalized device coordinates
         center1_norm = normalize_coordinates(
-            (center1_x, center1_y), w1, h1, is_vertical1
+            (center1_x, center1_y), img1_shape[1], img1_shape[0], is_img1_vertical
         )
         center2_norm = normalize_coordinates(
-            (center2_x, center2_y), w2, h2, is_vertical2
+            (center2_x, center2_y), img2_shape[1], img2_shape[0], is_img2_vertical
         )
 
         debugger.log_centers(center1_norm, center2_norm)
@@ -245,12 +281,12 @@ def visualize_image_matches(
         bbox2 = ax2.get_position()
 
         # Calculate figure coordinates with orientation handling
-        if is_vertical1:
+        if is_img1_vertical:
             fig_y1 = bbox1.y0 + (1 - center1_norm[1]) * bbox1.height
         else:
             fig_y1 = bbox1.y0 + (1 - center1_norm[1]) * bbox1.height
 
-        if is_vertical2:
+        if is_img2_vertical:
             fig_y2 = bbox2.y0 + (1 - center2_norm[1]) * bbox2.height
         else:
             fig_y2 = bbox2.y0 + (1 - center2_norm[1]) * bbox2.height
@@ -285,145 +321,195 @@ def visualize_image_matches(
         )
 
     # Set titles and remove axes
-    ax1.set_title(f"Image 1: {img1_name}", fontsize=12)
-    ax2.set_title(f"Image 2: {img2_name}", fontsize=12)
     ax1.axis("off")
     ax2.axis("off")
+
     base_name1 = img1_name.split(".")[0]
     base_name2 = img2_name.split(".")[0]
+
     output_file = os.path.join(
         output_dir,
         f"s{avg_score}_{base_name1}_vs_{base_name2}_patches_dist{int(distance_threshold)}.jpg",
     )
-    plt.savefig(output_file, bbox_inches="tight", dpi=300)
 
+    plt.savefig(output_file, bbox_inches="tight", dpi=300)
     plt.close()
 
 
-# def loop_images(
-#     csv_file: str,
-#     base_path: str,
-#     patches_path: str,
-#     image_path: str,
-#     output_dir: str,
-#     distance_threshold: float = 100,
-#     debug: bool = False,
-# ):
-#     image_pairs = set()
-#     i = 0
-#     for df in pd.read_csv(csv_file, chunksize=1000):
-#         i += 1
-#         # df["matches"] = df["matches"].apply(ast.literal_eval)
+def images_in_list(image_list, file1, file2):
+    if image_list is None:
+        return True
+    img1_in_list: bool = False
+    img2_in_list: bool = False
+    for item in image_list:
+        if not img1_in_list and file1.startswith(item):
+            img1_in_list = True
+        if not img2_in_list and file2.startswith(item):
+            img2_in_list = True
+        if img1_in_list and img2_in_list:
+            break
 
-#         for _, row in df.iterrows():
-#             img1 = os.path.basename(row["file1"]).split("_")[0] + ".jpg"
-#             img2 = os.path.basename(row["file2"]).split("_")[0] + ".jpg"
-#             if img1 != img2:
-#                 pair = tuple(sorted([img1, img2]))
-#                 image_pairs.add(pair)
-
-#         print(f"Found {len(image_pairs)} unique image pairs")
-#         for img1, img2 in image_pairs:
-#             print(f"Processing pair: {img1} - {img2}")
-#             visualize_image_matches(
-#                 img1,
-#                 img2,
-#                 df,
-#                 base_path,
-#                 patches_path,
-#                 image_path,
-#                 output_dir,
-#                 distance_threshold,
-#                 debug=debug,
-#             )
-#         print(f"finished chunck {i}")
-#     pass
+    return img1_in_list and img2_in_list
 
 
-def main():
-    # Load environment variables
+def fine_unique_pairs(
+    matches_df: pd.DataFrame,
+    image_list: list[str] = None,
+):
+    image_pairs = set()
+    if image_list is not None:
+        image_pairs = set(
+            [
+                tuple(sorted([img1, img2]))
+                for img1 in image_list
+                for img2 in image_list
+                if img1 != img2
+            ]
+        )
+        return image_pairs
+
+    # Process all unique image pairs
+    for _, row in matches_df.iterrows():
+        img1 = os.path.basename(row["file1"]).split("_")[0] + ".jpg"
+        img2 = os.path.basename(row["file2"]).split("_")[0] + ".jpg"
+
+        if img1 != img2:
+            pair = tuple(sorted([img1, img2]))
+            image_pairs.add(pair)
+            print(f"found {pair}")
+
+    return image_pairs
+
+
+def loop_over_csv(
+    matches_df: pd.DataFrame,
+    base_path: str,
+    patches_path: str,
+    image_path: str,
+    output_dir: str,
+    distance_threshold: float = 100,
+    image_list: list[str] = None,
+    match_metric: str = "mean_homo_err",
+    debug: bool = False,
+):
+    image_pairs = fine_unique_pairs(matches_df, image_list)
+
+    print(f"Found {len(image_pairs)} unique image pairs")
+    for img1, img2 in image_pairs:
+        print(f"Processing pair: {img1} - {img2}")
+        visualize_image_matches(
+            img1,
+            img2,
+            matches_df,
+            base_path,
+            patches_path,
+            image_path,
+            output_dir,
+            distance_threshold,
+            match_metric=match_metric,
+            debug=debug,
+        )
+
+    pass
+
+
+class Args:
+    pass
+
+
+def load_arguments():
     load_dotenv()
 
-    # Get paths from environment variables
-    base_path = os.getenv("BASE_PATH")
-    output_base = os.getenv("OUTPUT_BASE_PATH")
+    args = {}  # Use a dictionary to store environment variables
+    args["base_path"] = os.getenv("BASE_PATH")
+    args["output_base"] = os.getenv("OUTPUT_BASE_PATH")
 
-    image_path = os.path.join(base_path, os.getenv("IMAGES_IN"))
-    patches_path = os.path.join(base_path, os.getenv("PATCHES_IN"))
-    # patches_cache = os.path.join(base_path, os.getenv("PATCHES_CACHE"))
+    args["image_list"] = os.getenv("PAM_FILES_TO_PROCESS")
+    if args["image_list"] is not None:
+        args["image_list"] = args["image_list"].split(",")
 
-    csv_file = os.path.join(base_path, os.getenv("CLEAN_SIFT_MATCHES_W_TP_W_HOMO"))
+    args["image_path"] = os.path.join(args["base_path"], os.getenv("IMAGES_IN"))
+    args["patches_path"] = os.path.join(args["base_path"], os.getenv("PATCHES_IN"))
 
-    # Setup argument parser for optional parameters
+    args["csv_file"] = os.path.join(
+        args["base_path"], os.getenv("CLEAN_SIFT_MATCHES_W_TP_W_HOMO")
+    )
+
+    args["matches_df"] = pd.read_csv(args["csv_file"], low_memory=False)
+
     parser = argparse.ArgumentParser(description="Visualize image matches")
     parser.add_argument(
         "--output_dir",
-        default=f"{output_base}/match_visualizations_5",
+        default=f"{args['output_base']}/match_visualizations_5",
         help="Output directory for visualizations",
+    )
+
+    # distance, sum_homo_err, len_homo_err, mean_homo_err, std_homo_err
+    parser.add_argument(
+        "--match_metric",
+        default="distance",
+        help="The metric used for determining distance.",
     )
 
     parser.add_argument(
         "--distance_threshold",
         type=float,
-        default=100,
+        default=20,
         help="Distance threshold for filtering matches",
     )
     parser.add_argument(
         "--image1",
         help="Optional: specific first image to process",
-        # default="M42970-1-E.jpg",
+        # default="M40596-1-C.jpg",
     )
     parser.add_argument(
         "--image2",
         help="Optional: specific second image to process",
-        # default="M43003-1-E.jpg",
+        # default="M40601-1-E.jpg",
     )
 
-    args = parser.parse_args()
+    parser.add_argument("--debug", default=False, help="Should log debug information.")
+
+    parsed_args = parser.parse_args()
+    args.update(vars(parsed_args))  # Combine environment variables and parser arguments
+    args = SimpleNamespace(**args)
+    return args
+
+
+def main():
+    # Setup argument parser for optional parameters
+    args = load_arguments()
 
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
-
-    # Read and process matches
-    df = pd.read_csv(csv_file, low_memory=False)
-    # df["matches"] = df["matches"].apply(ast.literal_eval)
 
     if args.image1 and args.image2:
         # Process specific image pair
         visualize_image_matches(
             args.image1,
             args.image2,
-            df,
-            base_path,
-            patches_path,
-            image_path,
+            args.matches_df,
+            args.base_path,
+            args.patches_path,
+            args.image_path,
             args.output_dir,
             args.distance_threshold,
-            debug=False,
+            match_metric=args.match_metric,
+            debug=args.debug,
         )
-    else:
-        # Process all unique image pairs
-        image_pairs = set()
-        for _, row in df.iterrows():
-            img1 = os.path.basename(row["file1"]).split("_")[0] + ".jpg"
-            img2 = os.path.basename(row["file2"]).split("_")[0] + ".jpg"
-            if img1 != img2:
-                pair = tuple(sorted([img1, img2]))
-                image_pairs.add(pair)
+        return
 
-        print(f"Found {len(image_pairs)} unique image pairs")
-        for img1, img2 in image_pairs:
-            print(f"Processing pair: {img1} - {img2}")
-            visualize_image_matches(
-                img1,
-                img2,
-                df,
-                base_path,
-                patches_path,
-                image_path,
-                args.output_dir,
-                args.distance_threshold,
-            )
+    loop_over_csv(
+        args.matches_df,
+        args.base_path,
+        args.patches_path,
+        args.image_path,
+        args.output_dir,
+        args.distance_threshold,
+        args.image_list,
+        match_metric=args.match_metric,
+        debug=args.debug,
+    )
 
 
 if __name__ == "__main__":
