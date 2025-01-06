@@ -11,6 +11,8 @@ import pandas as pd
 from dotenv import load_dotenv
 from matplotlib.patches import Rectangle
 
+# from db_manager import db_manager
+
 
 class MatchDebugger:
     def __init__(self, debug=False):
@@ -352,9 +354,11 @@ def images_in_list(image_list, file1, file2):
     return img1_in_list and img2_in_list
 
 
-def fine_unique_pairs(
+def find_unique_pairs(
     matches_df: pd.DataFrame,
     image_list: list[str] = None,
+    distance_metric: str = "distance",
+    distance_threshold: float = 100,
 ):
     image_pairs = set()
     if image_list is not None:
@@ -376,7 +380,7 @@ def fine_unique_pairs(
         if img1 != img2:
             pair = tuple(sorted([img1, img2]))
             image_pairs.add(pair)
-            print(f"found {pair}")
+            # print(f"found {pair}")
 
     return image_pairs
 
@@ -392,7 +396,7 @@ def loop_over_csv(
     match_metric: str = "mean_homo_err",
     debug: bool = False,
 ):
-    image_pairs = fine_unique_pairs(matches_df, image_list)
+    image_pairs = find_unique_pairs(matches_df, image_list)
 
     print(f"Found {len(image_pairs)} unique image pairs")
     for img1, img2 in image_pairs:
@@ -409,7 +413,6 @@ def loop_over_csv(
             match_metric=match_metric,
             debug=debug,
         )
-
     pass
 
 
@@ -430,11 +433,9 @@ def load_arguments():
 
     args["image_path"] = os.path.join(args["base_path"], os.getenv("IMAGES_IN"))
     args["patches_path"] = os.path.join(args["base_path"], os.getenv("PATCHES_IN"))
-
     args["csv_file"] = os.path.join(
         args["base_path"], os.getenv("CLEAN_SIFT_MATCHES_W_TP_W_HOMO")
     )
-
     args["matches_df"] = pd.read_csv(args["csv_file"], low_memory=False)
 
     parser = argparse.ArgumentParser(description="Visualize image matches")
@@ -454,7 +455,7 @@ def load_arguments():
     parser.add_argument(
         "--distance_threshold",
         type=float,
-        default=20,
+        default=50,
         help="Distance threshold for filtering matches",
     )
     parser.add_argument(
@@ -483,12 +484,17 @@ def main():
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
 
+    args.filtered_matches_df = args.matches_df[
+        args.matches_df[args.match_metric] <= args.distance_threshold
+    ]
+    print("filtered")
+
     if args.image1 and args.image2:
         # Process specific image pair
         visualize_image_matches(
             args.image1,
             args.image2,
-            args.matches_df,
+            args.filtered_matches_df,
             args.base_path,
             args.patches_path,
             args.image_path,
@@ -500,7 +506,7 @@ def main():
         return
 
     loop_over_csv(
-        args.matches_df,
+        args.filtered_matches_df,
         args.base_path,
         args.patches_path,
         args.image_path,
