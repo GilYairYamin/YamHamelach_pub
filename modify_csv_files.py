@@ -1,7 +1,6 @@
 import os
 
 import pandas as pd
-from dotenv import load_dotenv
 
 # ERROR = 40
 CHUNK_SIZE = 10000
@@ -21,7 +20,6 @@ def clean_csv(file_path):
         print(f"Processing chunk {i}, with shape: {chunk.shape}")
 
         chunk.drop(columns=["matches"], inplace=True)
-        # chunk = chunk[chunk["mean_homo_err"] <= ERROR]
 
         if start is True:
             start = False
@@ -30,7 +28,7 @@ def clean_csv(file_path):
 
         chunk.to_csv(new_file_path, mode="a", header=False, index=False)
 
-    df = pd.read_csv(new_file_path)
+    df = pd.read_csv(new_file_path, low_memory=False)
     df.sort_values(by=["file1", "file2"], inplace=True)
     df.to_csv(new_file_path, mode="w", index=False)
     return new_file_path
@@ -77,9 +75,4 @@ def generate_general_matches(file_path):
     return new_file_path
 
 
-clean_csv("./local_data/sift_matches_v3_w_tp_w_homo_only_1000lines.csv")
-# generate_general_matches("./local_data/clean_sift_matches_v3_w_tp_w_homo.csv")
-
-
-def load_args():
-    load_dotenv()
+clean_csv("./local_data/sift_matches_v3_w_tp_w_homo.csv")

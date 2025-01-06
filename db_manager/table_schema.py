@@ -6,7 +6,6 @@ from sqlalchemy import (
     Boolean,
     ForeignKey,
     CheckConstraint,
-    ARRAY,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
@@ -44,7 +43,6 @@ class Match(Base):
 
     patch_id_1 = Column(String(100), ForeignKey("patches.patch_id"), primary_key=True)
     patch_id_2 = Column(String(100), ForeignKey("patches.patch_id"), primary_key=True)
-    matches = Column(ARRAY(Float))
     match_score = Column(Integer)
     distance = Column(Float)
     sum_homo_err = Column(Float)

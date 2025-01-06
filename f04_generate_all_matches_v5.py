@@ -338,22 +338,6 @@ def visualize_image_matches(
     plt.close()
 
 
-def images_in_list(image_list, file1, file2):
-    if image_list is None:
-        return True
-    img1_in_list: bool = False
-    img2_in_list: bool = False
-    for item in image_list:
-        if not img1_in_list and file1.startswith(item):
-            img1_in_list = True
-        if not img2_in_list and file2.startswith(item):
-            img2_in_list = True
-        if img1_in_list and img2_in_list:
-            break
-
-    return img1_in_list and img2_in_list
-
-
 def find_unique_pairs(
     matches_df: pd.DataFrame,
     image_list: list[str] = None,
@@ -372,15 +356,22 @@ def find_unique_pairs(
         )
         return image_pairs
 
-    # Process all unique image pairs
-    for _, row in matches_df.iterrows():
-        img1 = os.path.basename(row["file1"]).split("_")[0] + ".jpg"
-        img2 = os.path.basename(row["file2"]).split("_")[0] + ".jpg"
+    def remove_extenstion(val):
+        return os.path.basename(val).split("_")[0] + ".jpg"
 
-        if img1 != img2:
-            pair = tuple(sorted([img1, img2]))
-            image_pairs.add(pair)
-            # print(f"found {pair}")
+    unique_pairs = matches_df[["file1", "file2"]]
+    unique_pairs.loc[:, "file1"] = unique_pairs["file1"].apply(remove_extenstion)
+    unique_pairs.loc[:, "file2"] = unique_pairs["file2"].apply(remove_extenstion)
+    unique_pairs.drop_duplicates(inplace=True)
+
+    unique_pairs = unique_pairs[unique_pairs["file1"] != unique_pairs["file2"]]
+    print(f"found {len(unique_pairs)} combinations")
+
+    # Process all unique image pairs
+    for _, row in unique_pairs.iterrows():
+        pair = tuple(sorted([row["file1"], row["file2"]]))
+        image_pairs.add(pair)
+        # print(f"found {pair}")
 
     return image_pairs
 
@@ -427,7 +418,7 @@ def load_arguments():
     args["base_path"] = os.getenv("BASE_PATH")
     args["output_base"] = os.getenv("OUTPUT_BASE_PATH")
 
-    args["image_list"] = os.getenv("PAM_FILES_TO_PROCESS")
+    args["image_list"] = None  # os.getenv("PAM_FILES_TO_PROCESS")
     if args["image_list"] is not None:
         args["image_list"] = args["image_list"].split(",")
 
@@ -448,7 +439,7 @@ def load_arguments():
     # distance, sum_homo_err, len_homo_err, mean_homo_err, std_homo_err
     parser.add_argument(
         "--match_metric",
-        default="distance",
+        default="mean_homo_err",
         help="The metric used for determining distance.",
     )
 
@@ -487,7 +478,7 @@ def main():
     args.filtered_matches_df = args.matches_df[
         args.matches_df[args.match_metric] <= args.distance_threshold
     ]
-    print("filtered")
+    print("filtered matches")
 
     if args.image1 and args.image2:
         # Process specific image pair

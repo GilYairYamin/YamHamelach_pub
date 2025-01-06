@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from table_schema import Base, Image, Match, Patch
+from .table_schema import Base, Image, Match, Patch
 
 
 # Define your database URL
