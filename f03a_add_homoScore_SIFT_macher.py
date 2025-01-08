@@ -25,8 +25,14 @@ pkl_directory = os.path.join(base_path, os.getenv("HOMOGRAPHY_CACHE"))
 df = pd.read_csv(csv_sift_matches_w_tp)
 
 # Initialize a new column to store the averages
+# df["sum_homo_err"] = -1
+# df["len_homo_err"] = -1
+
 df["sum_homo_err"] = -1
 df["len_homo_err"] = -1
+df["mean_homo_err"] = -1
+df["std_homo_err"] = -1
+df["is_valid"] = False
 
 # Iterate over each row in the CSV file
 # for index, row in df.iterrows():
@@ -76,7 +82,17 @@ for index, row in tqdm(df.iterrows(), total=len(df)):
         print(f".pkl file not found: {pkl_filename}")
 
 # Filter only the valid rows
-valid_df = df[df["is_valid"] | df["Match"]]
+df.dropna(inplace=True)
+
+mask = (
+    (df["sum_homo_err"] < 0)
+    | (df["len_homo_err"] < 0)
+    | (df["mean_homo_err"] < 0)
+    | (df["std_homo_err"] < 0)
+    | (df["is_valid"])
+)
+valid_df = df[mask]
+
 
 # Save the updated CSV file
 valid_df.to_csv(csv_sift_matches_w_tp_w_homo, index=False)

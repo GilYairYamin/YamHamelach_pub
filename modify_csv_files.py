@@ -3,7 +3,7 @@ import os
 import pandas as pd
 
 # ERROR = 40
-CHUNK_SIZE = 10000
+CHUNK_SIZE = 100000
 
 
 def clean_csv(file_path):
@@ -19,7 +19,8 @@ def clean_csv(file_path):
         i += 1
         print(f"Processing chunk {i}, with shape: {chunk.shape}")
 
-        chunk.drop(columns=["matches"], inplace=True)
+        chunk.dropna(inplace=True)
+        chunk.drop(columns=["matches", "Match", "is_valid"], inplace=True)
 
         if start is True:
             start = False

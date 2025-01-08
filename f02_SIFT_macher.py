@@ -134,6 +134,7 @@ class FragmentMatcher:
 
     def get_image_files(self) -> List[str]:
         """Get a list of all image file paths in the image_base_path directory."""
+
         image_files = []
         for root, _, files in os.walk(self.image_base_path):
             for file in files:
@@ -197,6 +198,8 @@ class FragmentMatcher:
                     pbar.update(1)
                     good_matches = self.matcher.calc_matches(image_path1, image_path2)
 
+                    if len(good_matches) <= 0:
+                        continue
                     # Write match details to the CSV
                     writer.writerow(
                         {

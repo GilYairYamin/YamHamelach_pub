@@ -11,9 +11,7 @@ import db_manager.db_manager as db_m
 def find_unique_images(matches_df: pd.DataFrame):
     image_id_set: set = set()
 
-    print("start_big_op_1")
     unique_patches_1 = matches_df["file1"].unique()
-    print("start_big_op_2")
     unique_patches_2 = matches_df["file2"].unique()
 
     patch_set_1: set = set(unique_patches_1)
@@ -30,10 +28,10 @@ def find_unique_images(matches_df: pd.DataFrame):
 
 def add_images_to_db(image_id_set: set):
     for image in image_id_set:
-        db_m.add_image_by_name(image)
+        db_m.add_image_by_id(image)
 
 
-def add_patches_to_db(base_dir, image_id_set: set):
+def add_patches_to_db(base_dir: str, image_id_set: set):
     for image_id in image_id_set:
         patch_dir_path = os.path.join(base_dir, image_id)
         json_path = os.path.join(patch_dir_path, f"{image_id}_patch_info.json")
@@ -41,7 +39,14 @@ def add_patches_to_db(base_dir, image_id_set: set):
         with open(json_path, "r") as file:
             data = json.load(file)
 
-        print(data)
+        for key in data.keys():
+            patch_data = data[key]
+            filename = patch_data["filename"]
+            patch_id = filename.split(".")[0]
+            coords = patch_data["coordinates"]
+            [left, top, right, bottom] = coords
+
+            db_m.add_patch(patch_id, image_id, filename, left, top, right, bottom)
 
 
 def load_args():
@@ -66,12 +71,42 @@ def load_args():
     return args
 
 
+def add_matches_to_db(matches_df: pd.DataFrame):
+    for idx, row in matches_df.iterrows():
+        patch_id_1 = row["file1"].split(".")[0]
+        patch_id_2 = row["file2"].split(".")[0]
+        if patch_id_2 < patch_id_1:
+            patch_id_1, patch_id_2 = patch_id_2, patch_id_1
+
+        distance = row["distance"]
+        sum_homo_err = row["sum_homo_err"]
+        len_homo_err = row["len_homo_err"]
+        mean_homo_err = row["mean_homo_err"]
+        std_homo_err = row["std_homo_err"]
+
+        db_m.add_match(
+            patch_id_1,
+            patch_id_2,
+            distance,
+            sum_homo_err,
+            len_homo_err,
+            mean_homo_err,
+            std_homo_err,
+        )
+
+        if (idx + 1) % 10000 == 0:
+            print(f"match {idx + 1}")
+
+
 def main():
     args = load_args()
 
-    images = find_unique_images(args.matches_df)
+    print(args.matches_df.shape)
+    # images = find_unique_images(args.matches_df)
 
-    add_patches_to_db(args.patches_path, images)
+    # add_images_to_db(images)
+    # add_patches_to_db(args.patches_path, images)
+    # db_m.add_entire_df_to_db(args.matches_df)
 
 
 if __name__ == "__main__":

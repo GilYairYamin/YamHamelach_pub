@@ -3,7 +3,6 @@ from sqlalchemy import (
     String,
     Float,
     Integer,
-    Boolean,
     ForeignKey,
     CheckConstraint,
 )
@@ -26,10 +25,10 @@ class Patch(Base):
     patch_id = Column(String(100), primary_key=True)
     image_id = Column(String(100), ForeignKey("images.image_id"))
     patch_filename = Column(String(100))
+    coord_left = Column(Integer, nullable=False)
     coord_top = Column(Integer, nullable=False)
     coord_right = Column(Integer, nullable=False)
     coord_bottom = Column(Integer, nullable=False)
-    coord_left = Column(Integer, nullable=False)
 
     # Relationship to the Images table
     image = relationship("Image", back_populates="patches")
@@ -43,13 +42,11 @@ class Match(Base):
 
     patch_id_1 = Column(String(100), ForeignKey("patches.patch_id"), primary_key=True)
     patch_id_2 = Column(String(100), ForeignKey("patches.patch_id"), primary_key=True)
-    match_score = Column(Integer)
     distance = Column(Float)
     sum_homo_err = Column(Float)
     len_homo_err = Column(Float)
     mean_homo_err = Column(Float)
     std_homo_err = Column(Float)
-    is_valid = Column(Boolean)
 
     # Relationships
     patch1 = relationship("Patch", foreign_keys=[patch_id_1])

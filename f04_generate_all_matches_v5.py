@@ -158,7 +158,7 @@ def get_image_patches(
         )
     ]
 
-    image_matches = image_matches[image_matches[match_metric] <= distance_threshold]
+    # image_matches = image_matches[image_matches[match_metric] <= distance_threshold]
     match_scores = image_matches[match_metric].tolist()
 
     return image_matches, match_scores
@@ -212,6 +212,8 @@ def visualize_image_matches(
     image_matches, match_scores = get_image_patches(
         matches_df, img1_name, img2_name, distance_threshold
     )
+    
+    image_matches.to_csv(os.path.join(base_path, "test.csv"))
 
     # Process matches
     if match_scores:
@@ -436,7 +438,7 @@ def load_arguments():
         help="Output directory for visualizations",
     )
 
-    # distance, sum_homo_err, len_homo_err, mean_homo_err, std_homo_err
+    # sum_homo_err, len_homo_err, mean_homo_err, std_homo_err
     parser.add_argument(
         "--match_metric",
         default="mean_homo_err",
@@ -446,18 +448,18 @@ def load_arguments():
     parser.add_argument(
         "--distance_threshold",
         type=float,
-        default=50,
+        default=10,
         help="Distance threshold for filtering matches",
     )
     parser.add_argument(
         "--image1",
         help="Optional: specific first image to process",
-        # default="M40596-1-C.jpg",
+        default="M42970-1-E.jpg",
     )
     parser.add_argument(
         "--image2",
         help="Optional: specific second image to process",
-        # default="M40601-1-E.jpg",
+        default="M43003-1-E.jpg",
     )
 
     parser.add_argument("--debug", default=False, help="Should log debug information.")
@@ -475,17 +477,17 @@ def main():
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
 
-    args.filtered_matches_df = args.matches_df[
-        args.matches_df[args.match_metric] <= args.distance_threshold
-    ]
-    print("filtered matches")
+    # args.filtered_matches_df = args.matches_df[
+    #     args.matches_df[args.match_metric] <= args.distance_threshold
+    # ]
+    # print("filtered matches")
 
     if args.image1 and args.image2:
         # Process specific image pair
         visualize_image_matches(
             args.image1,
             args.image2,
-            args.filtered_matches_df,
+            args.matches_df,
             args.base_path,
             args.patches_path,
             args.image_path,

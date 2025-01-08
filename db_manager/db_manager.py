@@ -1,6 +1,9 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.dialects.postgresql import insert
 from .table_schema import Base, Image, Match, Patch
+
+import pandas as pd
 
 
 # Define your database URL
@@ -21,16 +24,73 @@ def init_package():
 init_package()
 
 
+def add_entire_df_to_db(matches_df: pd.DataFrame, chunk_size: int = 10000):
+    """Add or update matches in the database using bulk inserts."""
+    session = SessionLocal()
+    try:
+        for i in range(0, len(matches_df), chunk_size):
+            chunk = matches_df.iloc[i : i + chunk_size]
+
+            # Prepare a list of dictionaries for the bulk upsert
+            match_data = []
+            for _, row in chunk.iterrows():
+                patch_id_1 = row["file1"].split(".")[0]
+                patch_id_2 = row["file2"].split(".")[0]
+                if patch_id_2 < patch_id_1:
+                    patch_id_1, patch_id_2 = patch_id_2, patch_id_1
+
+                match_data.append(
+                    {
+                        "patch_id_1": patch_id_1,
+                        "patch_id_2": patch_id_2,
+                        "distance": row["distance"],
+                        "sum_homo_err": row["sum_homo_err"],
+                        "len_homo_err": row["len_homo_err"],
+                        "mean_homo_err": row["mean_homo_err"],
+                        "std_homo_err": row["std_homo_err"],
+                    }
+                )
+
+            # Use the insert construct with on_conflict_do_update
+            stmt = insert(Match).values(match_data)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["patch_id_1", "patch_id_2"],  # Composite unique key
+                set_={
+                    "distance": stmt.excluded.distance,
+                    "sum_homo_err": stmt.excluded.sum_homo_err,
+                    "len_homo_err": stmt.excluded.len_homo_err,
+                    "mean_homo_err": stmt.excluded.mean_homo_err,
+                    "std_homo_err": stmt.excluded.std_homo_err,
+                },
+            )
+            session.execute(stmt)
+            session.commit()
+
+            print(
+                f"Inserted/Updated {len(match_data)} matches (Chunk {i // chunk_size + 1})"
+            )
+
+    except Exception as e:
+        session.rollback()
+        print(f"Error inserting/updating matches: {e}")
+    finally:
+        session.close()
+
+
 # Database Query Functions
-def add_image_by_name(image_name: str):
+def add_image_by_id(image_id: str):
     """Adds a new image to the database."""
     session = SessionLocal()
     try:
-        image_id = f"{image_name}.jpg"
-        img = Image(image_id=image_id, filename=image_name)
-        session.add(img)
+        image_filename = f"{image_id}.jpg"
+        stmt = insert(Image).values(image_id=image_id, image_filename=image_filename)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["image_id"],  # Conflict check on the primary key
+            set_={"image_filename": stmt.excluded.image_filename},  # Update on conflict
+        )
+        session.execute(stmt)
         session.commit()
-        print(f"Image {image_name} added successfully!")
+
     except Exception as e:
         session.rollback()
         print(f"Error adding image: {e}")
@@ -51,7 +111,7 @@ def get_all_images():
 def add_patch(
     patch_id: str,
     image_id: str,
-    filename: str,
+    patch_filename: str,
     coord_top: int,
     coord_right: int,
     coord_bottom: int,
@@ -60,18 +120,29 @@ def add_patch(
     """Adds a new patch to the database."""
     session = SessionLocal()
     try:
-        patch = Patch(
+        stmt = insert(Patch).values(
             patch_id=patch_id,
             image_id=image_id,
-            filename=filename,
+            patch_filename=patch_filename,
+            coord_left=coord_left,
             coord_top=coord_top,
             coord_right=coord_right,
             coord_bottom=coord_bottom,
-            coord_left=coord_left,
         )
-        session.add(patch)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["patch_id"],  # Conflict check on the primary key
+            set_={
+                "image_id": stmt.excluded.image_id,
+                "patch_filename": stmt.excluded.patch_filename,
+                "coord_left": stmt.excluded.coord_left,
+                "coord_top": stmt.excluded.coord_top,
+                "coord_right": stmt.excluded.coord_right,
+                "coord_bottom": stmt.excluded.coord_bottom,
+            },
+        )
+        session.execute(stmt)
         session.commit()
-        print(f"Patch {patch_id} added successfully!")
+
     except Exception as e:
         session.rollback()
         print(f"Error adding patch: {e}")
@@ -92,41 +163,40 @@ def get_patches_by_image(image_id: str):
 def add_match(
     patch_id_1: str,
     patch_id_2: str,
-    matches=None,
-    match_score=None,
-    distance=None,
-    sum_homo_err=None,
-    len_homo_err=None,
-    mean_homo_err=None,
-    std_homo_err=None,
-    is_valid=None,
+    distance: float,
+    sum_homo_err: float,
+    len_homo_err: float,
+    mean_homo_err: float,
+    std_homo_err: float,
 ):
     """Adds a match between two patches with optional parameters."""
     session = SessionLocal()
     try:
-        # Initialize the Match object with required parameters
-        match = Match(patch_id_1=patch_id_1, patch_id_2=patch_id_2)
+        match_data = {
+            "patch_id_1": patch_id_1,
+            "patch_id_2": patch_id_2,
+            "distance": distance,
+            "sum_homo_err": sum_homo_err,
+            "len_homo_err": len_homo_err,
+            "mean_homo_err": mean_homo_err,
+            "std_homo_err": std_homo_err,
+        }
 
-        # Set optional parameters if provided
-        if matches is not None:
-            match.matches = matches
-        if match_score is not None:
-            match.match_score = match_score
-        if distance is not None:
-            match.distance = distance
-        if sum_homo_err is not None:
-            match.sum_homo_err = sum_homo_err
-        if len_homo_err is not None:
-            match.len_homo_err = len_homo_err
-        if mean_homo_err is not None:
-            match.mean_homo_err = mean_homo_err
-        if std_homo_err is not None:
-            match.std_homo_err = std_homo_err
-        if is_valid is not None:
-            match.is_valid = is_valid
-
-        # Add the Match object to the session and commit
-        session.add(match)
+        stmt = insert(Match).values(match_data)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[
+                "patch_id_1",
+                "patch_id_2",
+            ],
+            set_={
+                "distance": stmt.excluded.distance,
+                "sum_homo_err": stmt.excluded.sum_homo_err,
+                "len_homo_err": stmt.excluded.len_homo_err,
+                "mean_homo_err": stmt.excluded.mean_homo_err,
+                "std_homo_err": stmt.excluded.std_homo_err,
+            },
+        )
+        session.execute(stmt)
         session.commit()
 
     except Exception as e:
