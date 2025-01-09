@@ -8,7 +8,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from dotenv import load_dotenv
+from arguments_loader import load_env_arguments
 from matplotlib.patches import Rectangle
 
 # from db_manager import db_manager
@@ -53,8 +53,10 @@ class MatchDebugger:
         if not self.debug:
             return
 
-        print(f"Figure coordinates 1: ({fig_coords1[0]:.3f}, {fig_coords1[1]:.3f})")
-        print(f"Figure coordinates 2: ({fig_coords2[0]:.3f}, {fig_coords2[1]:.3f})")
+        coords_str1 = f"({fig_coords1[0]:.3f}, {fig_coords1[1]:.3f})"
+        coords_str2 = f"({fig_coords2[0]:.3f}, {fig_coords2[1]:.3f})"
+        print(f"Figure coordinates 1: {coords_str1}")
+        print(f"Figure coordinates 2: {coords_str2}")
 
     def draw_debug_markers(self, ax1, ax2, center1, center2, w1, h1, w2, h2):
         if not self.debug:
@@ -77,7 +79,9 @@ def load_image(image_path: str):
 
 def get_patch_info(base_path: str, file_name: str, box: str) -> Dict:
     """Get patch coordinates from JSON file."""
-    json_file = os.path.join(base_path, file_name, f"{file_name}_patch_info.json")
+    json_file = os.path.join(
+        base_path, file_name, f"{file_name}_patch_info.json"
+    )
     if os.path.exists(json_file):
         with open(json_file, "r") as f:
             patch_info = json.load(f)
@@ -137,7 +141,15 @@ def create_result_img_figure(img1, img2, img1_name, img2_name):
     ax1.set_aspect("equal")
     ax2.set_aspect("equal")
 
-    return fig, ax1, ax2, img1_shape, img2_shape, is_img1_vertical, is_img2_vertical
+    return (
+        fig,
+        ax1,
+        ax2,
+        img1_shape,
+        img2_shape,
+        is_img1_vertical,
+        is_img2_vertical,
+    )
 
 
 def get_image_patches(
@@ -158,7 +170,9 @@ def get_image_patches(
         )
     ]
 
-    # image_matches = image_matches[image_matches[match_metric] <= distance_threshold]
+    # image_matches = image_matches[
+    #     image_matches[match_metric] <= distance_threshold
+    # ]
     match_scores = image_matches[match_metric].tolist()
 
     return image_matches, match_scores
@@ -195,6 +209,10 @@ def visualize_image_matches(
 ):
     # Initialize debugger
     debugger = MatchDebugger(debug)
+    matches_df = matches_df[
+        (matches_df["distance"] >= 50)
+        & (matches_df[match_metric] <= distance_threshold)
+    ]
 
     # Load images
     img1 = load_image(os.path.join(image_path, img1_name))
@@ -205,14 +223,20 @@ def visualize_image_matches(
 
     debugger.log_image_info(img1_name, img2_name, img1, img2)
 
-    fig, ax1, ax2, img1_shape, img2_shape, is_img1_vertical, is_img2_vertical = (
-        create_result_img_figure(img1, img2, img1_name, img2_name)
-    )
+    (
+        fig,
+        ax1,
+        ax2,
+        img1_shape,
+        img2_shape,
+        is_img1_vertical,
+        is_img2_vertical,
+    ) = create_result_img_figure(img1, img2, img1_name, img2_name)
 
     image_matches, match_scores = get_image_patches(
         matches_df, img1_name, img2_name, distance_threshold
     )
-    
+
     image_matches.to_csv(os.path.join(base_path, "test.csv"))
 
     # Process matches
@@ -227,7 +251,9 @@ def visualize_image_matches(
         distance = row[match_metric]
         debugger.log_match_info(idx, img1_name, img2_name, distance)
 
-        patch1_info, patch2_info = get_patches_info(row, img1_name, patches_path)
+        patch1_info, patch2_info = get_patches_info(
+            row, img1_name, patches_path
+        )
 
         if patch1_info is None or patch2_info is None:
             continue
@@ -265,17 +291,31 @@ def visualize_image_matches(
         ax2.add_patch(rect2)
 
         # Calculate centers in data coordinates
-        center1_x = (patch1_info["coordinates"][0] + patch1_info["coordinates"][2]) / 2
-        center1_y = (patch1_info["coordinates"][1] + patch1_info["coordinates"][3]) / 2
-        center2_x = (patch2_info["coordinates"][0] + patch2_info["coordinates"][2]) / 2
-        center2_y = (patch2_info["coordinates"][1] + patch2_info["coordinates"][3]) / 2
+        center1_x = (
+            patch1_info["coordinates"][0] + patch1_info["coordinates"][2]
+        ) / 2
+        center1_y = (
+            patch1_info["coordinates"][1] + patch1_info["coordinates"][3]
+        ) / 2
+        center2_x = (
+            patch2_info["coordinates"][0] + patch2_info["coordinates"][2]
+        ) / 2
+        center2_y = (
+            patch2_info["coordinates"][1] + patch2_info["coordinates"][3]
+        ) / 2
 
         # Transform to normalized device coordinates
         center1_norm = normalize_coordinates(
-            (center1_x, center1_y), img1_shape[1], img1_shape[0], is_img1_vertical
+            (center1_x, center1_y),
+            img1_shape[1],
+            img1_shape[0],
+            is_img1_vertical,
         )
         center2_norm = normalize_coordinates(
-            (center2_x, center2_y), img2_shape[1], img2_shape[0], is_img2_vertical
+            (center2_x, center2_y),
+            img2_shape[1],
+            img2_shape[0],
+            is_img2_vertical,
         )
 
         debugger.log_centers(center1_norm, center2_norm)
@@ -331,10 +371,9 @@ def visualize_image_matches(
     base_name1 = img1_name.split(".")[0]
     base_name2 = img2_name.split(".")[0]
 
-    output_file = os.path.join(
-        output_dir,
-        f"s{avg_score}_{base_name1}_vs_{base_name2}_patches_dist{int(distance_threshold)}.jpg",
-    )
+    base_name = f"s{avg_score}_{base_name1}_vs_{base_name2}"
+    file_name = f"{base_name}_patches_dist{int(distance_threshold)}.jpg"
+    output_file = os.path.join(output_dir, file_name)
 
     plt.savefig(output_file, bbox_inches="tight", dpi=300)
     plt.close()
@@ -362,8 +401,12 @@ def find_unique_pairs(
         return os.path.basename(val).split("_")[0] + ".jpg"
 
     unique_pairs = matches_df[["file1", "file2"]]
-    unique_pairs.loc[:, "file1"] = unique_pairs["file1"].apply(remove_extenstion)
-    unique_pairs.loc[:, "file2"] = unique_pairs["file2"].apply(remove_extenstion)
+    unique_pairs.loc[:, "file1"] = unique_pairs["file1"].apply(
+        remove_extenstion
+    )
+    unique_pairs.loc[:, "file2"] = unique_pairs["file2"].apply(
+        remove_extenstion
+    )
     unique_pairs.drop_duplicates(inplace=True)
 
     unique_pairs = unique_pairs[unique_pairs["file1"] != unique_pairs["file2"]]
@@ -413,28 +456,15 @@ class Args:
     pass
 
 
-def load_arguments():
-    load_dotenv()
+def load_arguments_test():
+    args: SimpleNamespace = load_env_arguments()
 
-    args = {}  # Use a dictionary to store environment variables
-    args["base_path"] = os.getenv("BASE_PATH")
-    args["output_base"] = os.getenv("OUTPUT_BASE_PATH")
-
-    args["image_list"] = None  # os.getenv("PAM_FILES_TO_PROCESS")
-    if args["image_list"] is not None:
-        args["image_list"] = args["image_list"].split(",")
-
-    args["image_path"] = os.path.join(args["base_path"], os.getenv("IMAGES_IN"))
-    args["patches_path"] = os.path.join(args["base_path"], os.getenv("PATCHES_IN"))
-    args["csv_file"] = os.path.join(
-        args["base_path"], os.getenv("CLEAN_SIFT_MATCHES_W_TP_W_HOMO")
-    )
-    args["matches_df"] = pd.read_csv(args["csv_file"], low_memory=False)
+    args.matches_df = pd.read_csv(args.csv_file)
 
     parser = argparse.ArgumentParser(description="Visualize image matches")
     parser.add_argument(
         "--output_dir",
-        default=f"{args['output_base']}/match_visualizations_5",
+        default=f"{args.output_base_path}/match_visualizations_5",
         help="Output directory for visualizations",
     )
 
@@ -462,25 +492,20 @@ def load_arguments():
         default="M43003-1-E.jpg",
     )
 
-    parser.add_argument("--debug", default=False, help="Should log debug information.")
+    parser.add_argument(
+        "--debug", default=False, help="Should log debug information."
+    )
 
     parsed_args = parser.parse_args()
-    args.update(vars(parsed_args))  # Combine environment variables and parser arguments
-    args = SimpleNamespace(**args)
-    return args
+    return SimpleNamespace(**parsed_args.__dict__, **args.__dict__)
 
 
 def main():
     # Setup argument parser for optional parameters
-    args = load_arguments()
+    args = load_arguments_test()
 
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
-
-    # args.filtered_matches_df = args.matches_df[
-    #     args.matches_df[args.match_metric] <= args.distance_threshold
-    # ]
-    # print("filtered matches")
 
     if args.image1 and args.image2:
         # Process specific image pair
@@ -499,7 +524,7 @@ def main():
         return
 
     loop_over_csv(
-        args.filtered_matches_df,
+        args.matches_df,
         args.base_path,
         args.patches_path,
         args.image_path,
