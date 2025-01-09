@@ -8,7 +8,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from arguments_loader import load_env_arguments
+from env_arguments_loader import load_env_arguments
 from matplotlib.patches import Rectangle
 
 # from db_manager import db_manager
