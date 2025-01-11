@@ -97,7 +97,9 @@ class DropboxUploader:
         """Upload a single file to Dropbox, with path validation and retry logic."""
 
         def _upload():
-            if not self.is_valid_dropbox_path(dropbox_path, check_existence=False):
+            if not self.is_valid_dropbox_path(
+                dropbox_path, check_existence=False
+            ):
                 print(
                     f"Invalid Dropbox path or insufficient permissions: {dropbox_path}"
                 )
@@ -114,8 +116,8 @@ class DropboxUploader:
                 if file_size <= CHUNK_SIZE:
                     self.dbx.files_upload(f.read(), dropbox_path)
                 else:
-                    upload_session_start_result = self.dbx.files_upload_session_start(
-                        f.read(CHUNK_SIZE)
+                    upload_session_start_result = (
+                        self.dbx.files_upload_session_start(f.read(CHUNK_SIZE))
                     )
                     cursor = dropbox.files.UploadSessionCursor(
                         session_id=upload_session_start_result.session_id,
@@ -160,8 +162,10 @@ class DropboxUploader:
                         continue
 
                     relative_path = local_path.relative_to(local_dir_path)
-                    dropbox_path = f"{dropbox_base_path}/{relative_path}".replace(
-                        "\\", "/"
+                    dropbox_path = (
+                        f"{dropbox_base_path}/{relative_path}".replace(
+                            "\\", "/"
+                        )
                     )
 
                     if self.upload_file(str(local_path), dropbox_path):
@@ -205,7 +209,9 @@ class DropboxUploader:
                 return
 
             if self.file_exists_in_dropbox(to_path):
-                print(f"File already exists at destination, skipping: {to_path}")
+                print(
+                    f"File already exists at destination, skipping: {to_path}"
+                )
                 return
 
             self.dbx.files_copy_v2(from_path, to_path)
@@ -223,7 +229,9 @@ class DropboxUploader:
 
             def process_entries(entries):
                 for entry in entries:
-                    relative_path = entry.path_display[len(from_folder) :].lstrip("/")
+                    relative_path = entry.path_display[
+                        len(from_folder) :
+                    ].lstrip("/")
                     if (only_sub_folder is not None) and (
                         only_sub_folder not in relative_path
                     ):
@@ -237,9 +245,13 @@ class DropboxUploader:
                         self.ensure_folder_exists(dest_path)
                     elif isinstance(entry, dropbox.files.FileMetadata):
                         if not self.file_exists_in_dropbox(dest_path):
-                            self.copy_file_within_dropbox(entry.path_display, dest_path)
+                            self.copy_file_within_dropbox(
+                                entry.path_display, dest_path
+                            )
                         else:
-                            print(f"File already exists, skipping: {dest_path}")
+                            print(
+                                f"File already exists, skipping: {dest_path}"
+                            )
 
             process_entries(result.entries)
 
@@ -247,7 +259,9 @@ class DropboxUploader:
                 result = self.dbx.files_list_folder_continue(result.cursor)
                 process_entries(result.entries)
 
-            print(f"Successfully copied directory from {from_folder} to {to_folder}")
+            print(
+                f"Successfully copied directory from {from_folder} to {to_folder}"
+            )
 
         return self.execute_with_retry(_copy_directory)
 
@@ -264,7 +278,9 @@ class DropboxUploader:
                         self.dbx.files_get_metadata(parent_path)
                 return True
             except dropbox.exceptions.ApiError as e:
-                print(f"Error validating path: {dropbox_path}, error: {str(e)}")
+                print(
+                    f"Error validating path: {dropbox_path}, error: {str(e)}"
+                )
                 return False
 
         return self.execute_with_retry(_check_path)
@@ -285,14 +301,18 @@ class DropboxUploader:
 def main():
     # Initialize uploader with access token and app credentials
     uploader = DropboxUploader(
-        access_token=DROPBOX_ACCESS_TOKEN, app_key=APP_KEY, app_secret=APP_SECRET
+        access_token=DROPBOX_ACCESS_TOKEN,
+        app_key=APP_KEY,
+        app_secret=APP_SECRET,
     )
 
     # Example usage: Copy a directory within Dropbox
     from_folder = "/YamHamelach_data_n_model/"
     to_folder = "/Apps/YamHamelach"
     only_sub_folder = "patches_key_dec_cache"
-    uploader.copy_directory_within_dropbox(from_folder, to_folder, only_sub_folder)
+    uploader.copy_directory_within_dropbox(
+        from_folder, to_folder, only_sub_folder
+    )
 
 
 if __name__ == "__main__":

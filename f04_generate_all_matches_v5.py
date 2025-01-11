@@ -1,4 +1,5 @@
 import argparse
+import gc
 import json
 import os
 from types import SimpleNamespace
@@ -8,8 +9,9 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from env_arguments_loader import load_env_arguments
 from matplotlib.patches import Rectangle
+
+from env_arguments_loader import load_env_arguments
 
 # from db_manager import db_manager
 
@@ -203,15 +205,17 @@ def visualize_image_matches(
     patches_path: str,
     image_path: str,
     output_dir: str,
-    distance_threshold: float = 100,
+    distance_threshold: int = 25,
+    homo_err_threshold: float = 100,
     match_metric: str = "mean_homo_err",
     debug: bool = False,
 ):
     # Initialize debugger
     debugger = MatchDebugger(debug)
-    matches_df = matches_df[
-        (matches_df["distance"] >= 50)
-        & (matches_df[match_metric] <= distance_threshold)
+
+    filtered_df = matches_df[
+        (matches_df["distance"] >= distance_threshold)
+        & (matches_df[match_metric] <= homo_err_threshold)
     ]
 
     # Load images
@@ -223,6 +227,18 @@ def visualize_image_matches(
 
     debugger.log_image_info(img1_name, img2_name, img1, img2)
 
+    image_matches, match_scores = get_image_patches(
+        filtered_df, img1_name, img2_name, homo_err_threshold
+    )
+
+    if image_matches.empty:
+        print("didn't find matches", flush=True)
+        return
+
+    # csv_name = f"{img1_name}_vs_{img2_name}.csv"
+    # csv_path = os.path.join(output_dir, csv_name)
+    # image_matches.to_csv(csv_path)
+
     (
         fig,
         ax1,
@@ -233,12 +249,6 @@ def visualize_image_matches(
         is_img2_vertical,
     ) = create_result_img_figure(img1, img2, img1_name, img2_name)
 
-    image_matches, match_scores = get_image_patches(
-        matches_df, img1_name, img2_name, distance_threshold
-    )
-
-    image_matches.to_csv(os.path.join(base_path, "test.csv"))
-
     # Process matches
     if match_scores:
         # Take up to first 4 scores
@@ -247,6 +257,7 @@ def visualize_image_matches(
     else:
         avg_score = 0
 
+    distance = -1
     for idx, row in image_matches.iterrows():
         distance = row[match_metric]
         debugger.log_match_info(idx, img1_name, img2_name, distance)
@@ -371,8 +382,10 @@ def visualize_image_matches(
     base_name1 = img1_name.split(".")[0]
     base_name2 = img2_name.split(".")[0]
 
-    base_name = f"s{avg_score}_{base_name1}_vs_{base_name2}"
-    file_name = f"{base_name}_patches_dist{int(distance_threshold)}.jpg"
+    name_base = f"{base_name1}_{base_name2}_s{avg_score}"
+    name_ending = f"patches_dist{distance:.2f}.jpg"
+    file_name = f"{name_base}_{name_ending}.jpg"
+
     output_file = os.path.join(output_dir, file_name)
 
     plt.savefig(output_file, bbox_inches="tight", dpi=300)
@@ -382,8 +395,6 @@ def visualize_image_matches(
 def find_unique_pairs(
     matches_df: pd.DataFrame,
     image_list: list[str] = None,
-    distance_metric: str = "distance",
-    distance_threshold: float = 100,
 ):
     image_pairs = set()
     if image_list is not None:
@@ -427,7 +438,8 @@ def loop_over_csv(
     patches_path: str,
     image_path: str,
     output_dir: str,
-    distance_threshold: float = 100,
+    distance_threshold: int = 25,
+    homo_err_threshold: float = 100,
     image_list: list[str] = None,
     match_metric: str = "mean_homo_err",
     debug: bool = False,
@@ -446,14 +458,11 @@ def loop_over_csv(
             image_path,
             output_dir,
             distance_threshold,
+            homo_err_threshold,
             match_metric=match_metric,
             debug=debug,
         )
-    pass
-
-
-class Args:
-    pass
+        gc.collect()
 
 
 def load_arguments_test():
@@ -474,22 +483,27 @@ def load_arguments_test():
         default="mean_homo_err",
         help="The metric used for determining distance.",
     )
-
     parser.add_argument(
         "--distance_threshold",
+        type=int,
+        default=20,
+        help="Distance threshold for filtering matches",
+    )
+    parser.add_argument(
+        "--homo_err_threshold",
         type=float,
-        default=10,
+        default=50,
         help="Distance threshold for filtering matches",
     )
     parser.add_argument(
         "--image1",
         help="Optional: specific first image to process",
-        default="M42970-1-E.jpg",
+        # default="M42970-1-E.jpg",
     )
     parser.add_argument(
         "--image2",
         help="Optional: specific second image to process",
-        default="M43003-1-E.jpg",
+        # default="M43003-1-E.jpg",
     )
 
     parser.add_argument(
@@ -518,22 +532,27 @@ def main():
             args.image_path,
             args.output_dir,
             args.distance_threshold,
+            args.homo_err_threshold,
             match_metric=args.match_metric,
             debug=args.debug,
         )
         return
 
-    loop_over_csv(
-        args.matches_df,
-        args.base_path,
-        args.patches_path,
-        args.image_path,
-        args.output_dir,
-        args.distance_threshold,
-        args.image_list,
-        match_metric=args.match_metric,
-        debug=args.debug,
-    )
+    try:
+        loop_over_csv(
+            args.matches_df,
+            args.base_path,
+            args.patches_path,
+            args.image_path,
+            args.output_dir,
+            args.distance_threshold,
+            args.homo_err_threshold,
+            args.pam_files_to_process,
+            match_metric=args.match_metric,
+            debug=args.debug,
+        )
+    except Exception as e:
+        print(e)
 
 
 if __name__ == "__main__":

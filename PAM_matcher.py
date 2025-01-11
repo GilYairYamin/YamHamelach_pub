@@ -64,15 +64,21 @@ class TwoImagesMatchFeatures:
     def __init__(self, fn_1, fn_2, naive=False):
         self.load(fn_1, fn_2)
 
-        self._naive = naive  # replacing complicated match model with a naive one
+        self._naive = (
+            naive  # replacing complicated match model with a naive one
+        )
 
     def load(self, im1_fn, im2_fn):
         self._im1_fn = im1_fn
         self._im2_fn = im2_fn
 
     def calc_mathces(self):
-        self._img1 = cv2.imread(str(self._im1_fn), cv2.IMREAD_GRAYSCALE)  # queryImage
-        self._img2 = cv2.imread(str(self._im2_fn), cv2.IMREAD_GRAYSCALE)  # trainImage
+        self._img1 = cv2.imread(
+            str(self._im1_fn), cv2.IMREAD_GRAYSCALE
+        )  # queryImage
+        self._img2 = cv2.imread(
+            str(self._im2_fn), cv2.IMREAD_GRAYSCALE
+        )  # trainImage
 
         # print(self._img1.shape[:2], self._img2.shape[:2])
         # Initiate SIFT detector
@@ -119,7 +125,9 @@ class TwoImagesMatchFeatures:
             self._ptsA[i] = self._kp1[m.queryIdx].pt
             self._ptsB[i] = self._kp2[m.trainIdx].pt
 
-        self._H, mask = cv2.findHomography(self._ptsB, self._ptsA, method=cv2.RANSAC)
+        self._H, mask = cv2.findHomography(
+            self._ptsB, self._ptsA, method=cv2.RANSAC
+        )
 
     def plot_homography(self):
         (h, w) = self._img1.shape[:2]
@@ -136,7 +144,9 @@ class TwoImagesMatchFeatures:
 
     def calc_features(self):
         self._errors = np.zeros(len(self._good))
-        self._bins = np.power(2, np.array([0, 2, 4, 6, 8, 10], dtype=np.float32))
+        self._bins = np.power(
+            2, np.array([0, 2, 4, 6, 8, 10], dtype=np.float32)
+        )
         self._bins = np.concatenate((np.array([0]), self._bins))
         try:
             for i, m in enumerate(self._good):
@@ -199,7 +209,7 @@ class TwoImagesMatchFeatures:
 
         features_names.extend(
             [
-                f"error_{self._bins[i]:.0f}-{self._bins[i+1]:.0f}"
+                f"error_{self._bins[i]:.0f}-{self._bins[i + 1]:.0f}"
                 for i in range(len(self._bins) - 1)
             ]
         )
@@ -253,7 +263,9 @@ class CSVMatcher(PatchMatcher):
         PatchMatcher.__init__(self, args)
         self._csv = args.csv_fn
         self._raw_csv = pd.read_csv(self._csv)
-        self._valid_csv = self._raw_csv[self._raw_csv.Frg.str.isdigit() is True]
+        self._valid_csv = self._raw_csv[
+            self._raw_csv.Frg.str.isdigit() is True
+        ]
         # self._valid_csv = self._valid_csv[self._valid_csv.Box.str.isdigit() == True]
         self._valid_csv = self._valid_csv[
             self._valid_csv["Box"].apply(lambda x: np.modf(x)[0] == 0.0)
@@ -404,10 +416,14 @@ if __name__ == "__main__":
                 print(m)
                 if csv_match:
                     path = Path(
-                        args.matches, "true", f"{fn_1.parts[-1]}-{fn_2.parts[-1]}"
+                        args.matches,
+                        "true",
+                        f"{fn_1.parts[-1]}-{fn_2.parts[-1]}",
                     ).with_suffix(".jpg")
                 else:
                     path = Path(
-                        args.matches, "false", f"{fn_1.parts[-1]}-{fn_2.parts[-1]}"
+                        args.matches,
+                        "false",
+                        f"{fn_1.parts[-1]}-{fn_2.parts[-1]}",
                     ).with_suffix(".jpg")
                 save_match_figure(fn_1, fn_2, path)

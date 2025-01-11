@@ -8,19 +8,19 @@ from tqdm import tqdm
 class PamProcessor:
     def __init__(self, image_base_path, csv_filename, _sift_matches):
         self.pam_csv_file = csv_filename
-        assert os.path.exists(
-            self.pam_csv_file
-        ), f"PAM CSV file not found: {self.pam_csv_file}"
+        assert os.path.exists(self.pam_csv_file), (
+            f"PAM CSV file not found: {self.pam_csv_file}"
+        )
 
         self.image_base_path = image_base_path
-        assert os.path.exists(
-            self.image_base_path
-        ), f"Image base path not found: {self.image_base_path}"
+        assert os.path.exists(self.image_base_path), (
+            f"Image base path not found: {self.image_base_path}"
+        )
 
         self._sift_matches = _sift_matches
-        assert os.path.exists(
-            self._sift_matches
-        ), f"SIFT matches file not found: {self._sift_matches}"
+        assert os.path.exists(self._sift_matches), (
+            f"SIFT matches file not found: {self._sift_matches}"
+        )
 
     def read_csv(self):
         """Read the CSV file in chunks to avoid loading it all into memory."""
@@ -44,7 +44,9 @@ class PamProcessor:
         filtered_df = merged_df[merged_df["Box_x"] != merged_df["Box_y"]]
 
         # Select only the necessary columns: file1, box1, file2, box2
-        result_df = filtered_df[["Scroll", "Frg", "File_x", "Box_x", "File_y", "Box_y"]]
+        result_df = filtered_df[
+            ["Scroll", "Frg", "File_x", "Box_x", "File_y", "Box_y"]
+        ]
         return result_df
 
     def get_image_path(self, file_name, box):
@@ -71,8 +73,12 @@ class PamProcessor:
                     total=matches_df.shape[0],
                     desc="Processing Matches",
                 ):
-                    image_path1 = self.get_image_path(row["File_x"], row["Box_x"])
-                    image_path2 = self.get_image_path(row["File_y"], row["Box_y"])
+                    image_path1 = self.get_image_path(
+                        row["File_x"], row["Box_x"]
+                    )
+                    image_path2 = self.get_image_path(
+                        row["File_y"], row["Box_y"]
+                    )
 
                     # Check if both image paths are present in the current chunk
                     matching_rows = chunk[

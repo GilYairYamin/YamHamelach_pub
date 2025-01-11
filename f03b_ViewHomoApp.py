@@ -7,6 +7,7 @@ import pickle
 
 import cv2
 import matplotlib.pyplot as plt
+
 # import numpy as np
 import pandas as pd
 import streamlit as st
@@ -31,7 +32,9 @@ def load_keypoints(pkl_file_path):
 
 # Function to get patch information from a JSON file
 def get_patch_info(base_path: str, file_name: str, box: str):
-    json_file = os.path.join(base_path, file_name, f"{file_name}_patch_info.json")
+    json_file = os.path.join(
+        base_path, file_name, f"{file_name}_patch_info.json"
+    )
     if os.path.exists(json_file):
         with open(json_file, "r") as f:
             patch_info = json.load(f)
@@ -40,10 +43,14 @@ def get_patch_info(base_path: str, file_name: str, box: str):
 
 
 # Function to visualize a match between two patches
-def visualize_match(row, base_path, image_path, patches_key_dec_cache, debug=False):
+def visualize_match(
+    row, base_path, image_path, patches_key_dec_cache, debug=False
+):
     file1, file2 = row["file1"], row["file2"]
     keypoints = row["matches"]
-    sorted_keypoints_matches = sorted(keypoints, key=lambda x: x[2], reverse=True)
+    sorted_keypoints_matches = sorted(
+        keypoints, key=lambda x: x[2], reverse=True
+    )
 
     kp1 = os.path.join(patches_key_dec_cache, file1) + ".pkl"
     kp2 = os.path.join(patches_key_dec_cache, file2) + ".pkl"
@@ -202,7 +209,11 @@ def main():
             df = pd.read_csv(input_main_csv_file)
             df["matches"] = df["matches"].apply(ast.literal_eval)
             visualize_match(
-                df.iloc[10], PATCHES_IN, IMAGES_IN_path, patches_key_dec_cache, DEBUG
+                df.iloc[10],
+                PATCHES_IN,
+                IMAGES_IN_path,
+                patches_key_dec_cache,
+                DEBUG,
             )
         else:
             # Streamlit UI

@@ -18,7 +18,9 @@ class DropboxUploader:
     def upload_file(self, local_path, dropbox_path):
         """Upload a single file to Dropbox, with path validation."""
         if not self.is_valid_dropbox_path(dropbox_path):
-            print(f"Invalid Dropbox path or insufficient permissions: {dropbox_path}")
+            print(
+                f"Invalid Dropbox path or insufficient permissions: {dropbox_path}"
+            )
             return False
 
         try:
@@ -32,8 +34,8 @@ class DropboxUploader:
                     self.dbx.files_upload(f.read(), dropbox_path)
                 else:
                     # Large file, upload in chunks
-                    upload_session_start_result = self.dbx.files_upload_session_start(
-                        f.read(CHUNK_SIZE)
+                    upload_session_start_result = (
+                        self.dbx.files_upload_session_start(f.read(CHUNK_SIZE))
                     )
                     cursor = dropbox.files.UploadSessionCursor(
                         session_id=upload_session_start_result.session_id,
@@ -68,12 +70,17 @@ class DropboxUploader:
         for local_path in local_dir.rglob("*"):
             if local_path.is_file():
                 # Skip system files like .DS_Store
-                if local_path.name.startswith(".") or local_path.name == ".DS_Store":
+                if (
+                    local_path.name.startswith(".")
+                    or local_path.name == ".DS_Store"
+                ):
                     continue
 
                 # Calculate relative path for Dropbox
                 relative_path = local_path.relative_to(local_dir)
-                dropbox_path = f"{dropbox_base_path}/{relative_path}".replace("\\", "/")
+                dropbox_path = f"{dropbox_base_path}/{relative_path}".replace(
+                    "\\", "/"
+                )
 
                 # Upload the file
                 if self.upload_file(str(local_path), dropbox_path):
@@ -152,7 +159,9 @@ class DropboxUploader:
             result = self.list_all_files_within_dropbox(from_folder)
             for entry in result.entries:
                 # Calculate the relative path and the destination path
-                relative_path = entry.path_display[len(from_folder) :].lstrip("/")
+                relative_path = entry.path_display[len(from_folder) :].lstrip(
+                    "/"
+                )
                 if len(relative_path) == 0:
                     continue
                 dest_path = f"{to_folder}/{relative_path}"
@@ -162,9 +171,13 @@ class DropboxUploader:
                     self.ensure_folder_exists(dest_path)
                 elif isinstance(entry, dropbox.files.FileMetadata):
                     # Copy files to the corresponding path in the destination
-                    self.copy_file_within_dropbox(entry.path_display, dest_path)
+                    self.copy_file_within_dropbox(
+                        entry.path_display, dest_path
+                    )
 
-            print(f"Successfully copied directory from {from_folder} to {to_folder}")
+            print(
+                f"Successfully copied directory from {from_folder} to {to_folder}"
+            )
         except dropbox.exceptions.ApiError as e:
             print(f"Failed to list or copy folder {from_folder}: {str(e)}")
 
@@ -255,7 +268,9 @@ def test_dropbox_access(access_token):
 
         # Test basic connectivity
         account = dbx.users_get_current_account()
-        print(f"Successfully connected to account: {account.name.display_name}")
+        print(
+            f"Successfully connected to account: {account.name.display_name}"
+        )
 
         # List all files and folders
         print("\nListing all files and folders:")

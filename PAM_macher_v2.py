@@ -29,13 +29,17 @@ class NaiveImageMatcher:
     def _get_image_key(self, file_path: str) -> str:
         return os.path.basename(file_path)
 
-    def _serialize_keypoints(self, keypoints: List[cv2.KeyPoint]) -> List[Tuple]:
+    def _serialize_keypoints(
+        self, keypoints: List[cv2.KeyPoint]
+    ) -> List[Tuple]:
         return [
             (kp.pt, kp.size, kp.angle, kp.response, kp.octave, kp.class_id)
             for kp in keypoints
         ]
 
-    def _deserialize_keypoints(self, keypoints_data: List[Tuple]) -> List[cv2.KeyPoint]:
+    def _deserialize_keypoints(
+        self, keypoints_data: List[Tuple]
+    ) -> List[cv2.KeyPoint]:
         return [
             cv2.KeyPoint(
                 x=pt[0][0],
@@ -49,7 +53,9 @@ class NaiveImageMatcher:
             for pt in keypoints_data
         ]
 
-    def _process_image(self, file_path: str) -> Tuple[List[cv2.KeyPoint], np.ndarray]:
+    def _process_image(
+        self, file_path: str
+    ) -> Tuple[List[cv2.KeyPoint], np.ndarray]:
         image_key = self._get_image_key(file_path)
 
         if image_key in self.cache:
@@ -160,14 +166,18 @@ class FragmentMatcher:
         filtered_df = merged_df[merged_df["Box_x"] != merged_df["Box_y"]]
 
         # Select only the necessary columns: file1, box1, file2, box2
-        result_df = filtered_df[["Scroll", "Frg", "File_x", "Box_x", "File_y", "Box_y"]]
+        result_df = filtered_df[
+            ["Scroll", "Frg", "File_x", "Box_x", "File_y", "Box_y"]
+        ]
         return result_df
 
     def calculate_distances(self, matches_df):
         distances = []
 
         for index, row in tqdm(
-            matches_df.iterrows(), total=matches_df.shape[0], desc="Processing Matches"
+            matches_df.iterrows(),
+            total=matches_df.shape[0],
+            desc="Processing Matches",
         ):
             image_path1 = self.get_image_path(row["File_x"], row["Box_x"])
             image_path2 = self.get_image_path(row["File_y"], row["Box_y"])
@@ -233,7 +243,9 @@ class FragmentMatcher:
             )
 
             if patch1_info is None or patch2_info is None:
-                print(f"Couldn't load patch info for match {i + 1}. Skipping...")
+                print(
+                    f"Couldn't load patch info for match {i + 1}. Skipping..."
+                )
                 continue
 
             # Load patch images
@@ -243,7 +255,9 @@ class FragmentMatcher:
             patch2 = cv2.cvtColor(patch2, cv2.COLOR_BGR2RGB)
 
             # Create a new figure with 4 subplots
-            fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(20, 20))
+            fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(
+                2, 2, figsize=(20, 20)
+            )
 
             # Display the original images
             ax1.imshow(img1)
@@ -300,8 +314,12 @@ class FragmentMatcher:
             fig.suptitle(f"Match Score: {match['distance']}", fontsize=20)
             ax1.set_title(f"Original Image 1: {img1_name}", fontsize=14)
             ax2.set_title(f"Original Image 2: {img2_name}", fontsize=14)
-            ax3.set_title(f"Patch 1: {os.path.basename(match['file1'])}", fontsize=14)
-            ax4.set_title(f"Patch 2: {os.path.basename(match['file2'])}", fontsize=14)
+            ax3.set_title(
+                f"Patch 1: {os.path.basename(match['file1'])}", fontsize=14
+            )
+            ax4.set_title(
+                f"Patch 2: {os.path.basename(match['file2'])}", fontsize=14
+            )
 
             # Remove axes
             for ax in [ax1, ax2, ax3, ax4]:
@@ -318,7 +336,14 @@ class FragmentMatcher:
         # Write the successful match results to CSV
         with open(success_csv, mode="w", newline="") as file:
             writer = csv.DictWriter(
-                file, fieldnames=["scroll", "fragment", "file1", "file2", "distance"]
+                file,
+                fieldnames=[
+                    "scroll",
+                    "fragment",
+                    "file1",
+                    "file2",
+                    "distance",
+                ],
             )
             writer.writeheader()
             for match in distances:

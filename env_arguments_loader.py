@@ -17,6 +17,7 @@ def load_env_arguments():
 
     if args["pam_files_to_process"] is not None:
         args["pam_files_to_process"] = args["pam_files_to_process"].split(",")
+        args["pam_files_to_process"].sort()
 
     args["image_path"] = os.path.join(args["base_path"], args["images_in"])
     args["patches_path"] = os.path.join(args["base_path"], args["patches_in"])

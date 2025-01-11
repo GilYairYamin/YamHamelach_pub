@@ -34,7 +34,9 @@ class DropboxHandler:
                 # Test the connection
                 self._dbx.users_get_current_account()
             except AuthError as e:
-                st.error("Invalid Dropbox access token. Please check your credentials.")
+                st.error(
+                    "Invalid Dropbox access token. Please check your credentials."
+                )
                 logger.error(f"Dropbox authentication error: {e}")
                 raise
             except Exception as e:
@@ -134,13 +136,17 @@ def get_patch_info_from_dropbox(
         # Return the specific box information
         return patch_info.get(box)
     except Exception as e:
-        logger.error(f"Error loading patch info for {file_name}, box {box}: {e}")
+        logger.error(
+            f"Error loading patch info for {file_name}, box {box}: {e}"
+        )
         return None
 
 
 # Function to get patch information from a JSON file
 def get_patch_info(base_path: str, file_name: str, box: str):
-    json_file = os.path.join(base_path, file_name, f"{file_name}_patch_info.json")
+    json_file = os.path.join(
+        base_path, file_name, f"{file_name}_patch_info.json"
+    )
     if os.path.exists(json_file):
         with open(json_file, "r") as f:
             patch_info = json.load(f)
@@ -157,12 +163,16 @@ def load_csv_from_dropbox(dbx, dropbox_path):
 
 
 # Function to visualize a match between two patches
-def visualize_match(row, base_path, image_path, patches_key_dec_cache, debug=False):
+def visualize_match(
+    row, base_path, image_path, patches_key_dec_cache, debug=False
+):
     dropbox_handler = DropboxHandler(st.secrets["DROPBOX_ACCESS_TOKEN"])
 
     file1, file2 = row["file1"], row["file2"]
     keypoints = row["matches"]
-    sorted_keypoints_matches = sorted(keypoints, key=lambda x: x[2], reverse=True)
+    sorted_keypoints_matches = sorted(
+        keypoints, key=lambda x: x[2], reverse=True
+    )
 
     kp1 = os.path.join(patches_key_dec_cache, file1) + ".pkl"
     kp2 = os.path.join(patches_key_dec_cache, file2) + ".pkl"
@@ -208,8 +218,12 @@ def visualize_match(row, base_path, image_path, patches_key_dec_cache, debug=Fal
     # Load patch images
     # patch1 = load_image(file1_pathch_path)
     # patch2 = load_image(file2_pathch_path)
-    patch1 = load_image_from_bytes(dropbox_handler.load_file(file1_pathch_path))
-    patch2 = load_image_from_bytes(dropbox_handler.load_file(file2_pathch_path))
+    patch1 = load_image_from_bytes(
+        dropbox_handler.load_file(file1_pathch_path)
+    )
+    patch2 = load_image_from_bytes(
+        dropbox_handler.load_file(file2_pathch_path)
+    )
 
     if patch1 is None or patch2 is None:
         logger.error("Couldn't patch1 and patch2...")
@@ -366,7 +380,9 @@ def main():
     IMAGES_IN_path = os.path.join(base_path, os.getenv("IMAGES_IN"))
     PATCHES_IN = os.path.join(base_path, os.getenv("PATCHES_IN"))
     patches_key_dec_cache = os.path.join(base_path, os.getenv("PATCHES_CACHE"))
-    visualize_match(row, PATCHES_IN, IMAGES_IN_path, patches_key_dec_cache, DEBUG)
+    visualize_match(
+        row, PATCHES_IN, IMAGES_IN_path, patches_key_dec_cache, DEBUG
+    )
 
 
 if __name__ == "__main__":

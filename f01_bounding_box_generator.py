@@ -36,7 +36,10 @@ class PatchFinder:
 
     @property
     def id_map(self):
-        if self._id_map is None or self._id_map.shape[:2] != self.image.shape[:2]:
+        if (
+            self._id_map is None
+            or self._id_map.shape[:2] != self.image.shape[:2]
+        ):
             cols, rows = (32, 32)
             ids = np.arange(rows * cols)
             self._id_map = ids.reshape((cols, rows))
@@ -100,7 +103,9 @@ class PatchFinder:
         for i, box in enumerate(self._extracted_boxes):
             (left, top, right, bottom) = box
             c = np.random.randint(0, 125, 3)
-            im = cv2.rectangle(im, (left, top), (right, bottom), c.tolist(), 10)
+            im = cv2.rectangle(
+                im, (left, top), (right, bottom), c.tolist(), 10
+            )
             tag = self.tags[i]
             im = cv2.putText(
                 im,
@@ -130,9 +135,9 @@ class PatchFinder:
             (left, top, right, bottom) = box
             patch = img[top:bottom, left:right]
             tag = self.tags[i]
-            filename = Path(path, f"{Path(self._img_filename).stem}_{tag}").with_suffix(
-                ".jpg"
-            )
+            filename = Path(
+                path, f"{Path(self._img_filename).stem}_{tag}"
+            ).with_suffix(".jpg")
             plt.imsave(filename, patch)
 
             # Store patch information
@@ -142,7 +147,9 @@ class PatchFinder:
             }
 
     def save_patch_info(self, path):
-        info_file = Path(path, f"{Path(self._img_filename).stem}_patch_info.json")
+        info_file = Path(
+            path, f"{Path(self._img_filename).stem}_patch_info.json"
+        )
         with open(info_file, "w") as file:
             json.dump(self._patch_info, file, indent=2)
 
@@ -155,7 +162,9 @@ def load_args():
     args = {}
     args["base_path"] = os.getenv("BASE_PATH")
     args["images_in"] = os.path.join(args["base_path"], os.getenv("IMAGES_IN"))
-    args["patches_dir"] = os.path.join(args["base_path"], os.getenv("PATCHES_IN"))
+    args["patches_dir"] = os.path.join(
+        args["base_path"], os.getenv("PATCHES_IN")
+    )
     args["bbox_dir"] = os.path.join(args["base_path"], os.getenv("BBOXES_IN"))
     args["model_nn_weights"] = os.path.join(
         args["base_path"], os.getenv("MODEL_NN_WEIGHTS")
@@ -173,10 +182,14 @@ def load_args():
         default=args["patches_dir"],
     )
     parser.add_argument(
-        "--bbox_dir", help="path to save bounding box images", default=args["bbox_dir"]
+        "--bbox_dir",
+        help="path to save bounding box images",
+        default=args["bbox_dir"],
     )
 
-    parser.add_argument("--cp", help="yolov8 cp path", default=args["model_nn_weights"])
+    parser.add_argument(
+        "--cp", help="yolov8 cp path", default=args["model_nn_weights"]
+    )
     args.update(parser.parse_args())
     args = SimpleNamespace(**args)
     return args

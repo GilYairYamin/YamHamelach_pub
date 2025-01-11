@@ -65,8 +65,12 @@ class HomographyErrorCalculator:
         good_matches: List[cv2.DMatch],
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Compute the homography matrix and the error array for a set of good matches."""
-        ptsA = np.array([kp1[m.queryIdx].pt for m in good_matches], dtype="float")
-        ptsB = np.array([kp2[m.trainIdx].pt for m in good_matches], dtype="float")
+        ptsA = np.array(
+            [kp1[m.queryIdx].pt for m in good_matches], dtype="float"
+        )
+        ptsB = np.array(
+            [kp2[m.trainIdx].pt for m in good_matches], dtype="float"
+        )
 
         # Compute the homography matrix using RANSAC
         if ptsA.shape[0] < 4 or ptsB.shape[0] < 4:
@@ -102,7 +106,9 @@ class HomographyErrorCalculator:
 
         errors = []
         # Calculate matches and keypoints
-        good_matches = self.matcher.calc_matches(file1, file2)[:good_matches_count]
+        good_matches = self.matcher.calc_matches(file1, file2)[
+            :good_matches_count
+        ]
         if not good_matches:
             return errors
             # raise ValueError(f"No good matches found between {file1} and {file2}")
@@ -145,15 +151,21 @@ if __name__ == "__main__":
 
     _sift_matches = os.path.join(base_path, os.getenv("SIFT_MATCHES"))
     if not os.path.exists(_sift_matches):
-        raise FileNotFoundError(f"SIFT matches file not found at {_sift_matches}")
+        raise FileNotFoundError(
+            f"SIFT matches file not found at {_sift_matches}"
+        )
 
     image_cache_dir = os.path.join(base_path, os.getenv("PATCHES_CACHE"))
 
     descriptor_cache = DescriptorCacheManager(image_cache_dir)
     matcher = NaiveImageMatcher(descriptor_cache)
-    HOMOGRAPHY_CACHE_DIR = os.path.join(base_path, os.getenv("HOMOGRAPHY_CACHE"))
+    HOMOGRAPHY_CACHE_DIR = os.path.join(
+        base_path, os.getenv("HOMOGRAPHY_CACHE")
+    )
     error_cache = ErrorCacheManager(HOMOGRAPHY_CACHE_DIR)
-    error_calculator = HomographyErrorCalculator(matcher, error_cache, descriptor_cache)
+    error_calculator = HomographyErrorCalculator(
+        matcher, error_cache, descriptor_cache
+    )
 
     # Read image pairs and good matches from CSV file using generator
     for file1, file2, good_matches_count in tqdm(

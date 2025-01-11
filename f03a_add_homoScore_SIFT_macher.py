@@ -62,7 +62,9 @@ for index, row in tqdm(df.iterrows(), total=len(df)):
 
                 # Calculate the standard deviation
                 if len_value > 1:
-                    sum_of_squared_diff = sum((x - mean_value) ** 2 for x in data)
+                    sum_of_squared_diff = sum(
+                        (x - mean_value) ** 2 for x in data
+                    )
                     std_dev = math.sqrt(
                         sum_of_squared_diff / (len_value - 1)
                     )  # Sample standard deviation

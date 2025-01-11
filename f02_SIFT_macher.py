@@ -43,14 +43,18 @@ class DescriptorCacheManager:
         with open(cache_file, "wb") as f:
             pickle.dump(data, f)
 
-    def _serialize_keypoints(self, keypoints: List[cv2.KeyPoint]) -> List[Tuple]:
+    def _serialize_keypoints(
+        self, keypoints: List[cv2.KeyPoint]
+    ) -> List[Tuple]:
         """Serialize keypoints for saving to the cache."""
         return [
             (kp.pt, kp.size, kp.angle, kp.response, kp.octave, kp.class_id)
             for kp in keypoints
         ]
 
-    def _deserialize_keypoints(self, keypoints_data: List[Tuple]) -> List[cv2.KeyPoint]:
+    def _deserialize_keypoints(
+        self, keypoints_data: List[Tuple]
+    ) -> List[cv2.KeyPoint]:
         """Deserialize keypoints from cached data."""
         return [
             cv2.KeyPoint(
@@ -65,7 +69,9 @@ class DescriptorCacheManager:
             for pt in keypoints_data
         ]
 
-    def process_image(self, file_path: str) -> Tuple[List[cv2.KeyPoint], np.ndarray]:
+    def process_image(
+        self, file_path: str
+    ) -> Tuple[List[cv2.KeyPoint], np.ndarray]:
         """Process an image, either by loading cached data or computing new descriptors."""
         image_key = os.path.basename(file_path)
 
@@ -73,7 +79,9 @@ class DescriptorCacheManager:
             # Load cached data if available
             cached_data = self._load_cache(image_key)
             if cached_data:
-                keypoints = self._deserialize_keypoints(cached_data["keypoints"])
+                keypoints = self._deserialize_keypoints(
+                    cached_data["keypoints"]
+                )
                 descriptors = cached_data["descriptors"]
                 return keypoints, descriptors
 
@@ -138,7 +146,9 @@ class FragmentMatcher:
         image_files = []
         for root, _, files in os.walk(self.image_base_path):
             for file in files:
-                if file.endswith(".jpg"):  # Assuming patches are in .jpg format
+                if file.endswith(
+                    ".jpg"
+                ):  # Assuming patches are in .jpg format
                     image_files.append(os.path.join(root, file))
         return image_files
 
@@ -169,7 +179,9 @@ class FragmentMatcher:
                 writer.writeheader()
 
             with tqdm(
-                total=total_iterations, desc="Processing Patches", disable=False
+                total=total_iterations,
+                desc="Processing Patches",
+                disable=False,
             ) as pbar:
                 for i, j in itertools.combinations(range(len(image_files)), 2):
                     image_path1 = image_files[i]
@@ -184,7 +196,8 @@ class FragmentMatcher:
                     # different patches can't be from the same directory
                     if dirname1 == dirname2:
                         pbar.update(1)  # Update progress bar
-                        continue  # Skip if the images are from the same directory
+                        continue
+                    # Skip if the images are from the same directory
 
                     # Check if the pair has already been processed
                     if (image_path1, image_path2) in processed_pairs or (
@@ -196,7 +209,9 @@ class FragmentMatcher:
 
                     # Inner loop for calculating matches
                     pbar.update(1)
-                    good_matches = self.matcher.calc_matches(image_path1, image_path2)
+                    good_matches = self.matcher.calc_matches(
+                        image_path1, image_path2
+                    )
 
                     if len(good_matches) <= 0:
                         continue
