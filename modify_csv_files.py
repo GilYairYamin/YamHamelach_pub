@@ -2,6 +2,8 @@ import os
 
 import pandas as pd
 
+from env_arguments_loader import load_env_arguments
+
 # ERROR = 40
 CHUNK_SIZE = 100000
 
@@ -46,4 +48,10 @@ def clean_csv(
     return new_file_path
 
 
-clean_csv("./local_data/sift_matches_v3_w_tp_w_homo.csv")
+def main():
+    args = load_env_arguments(use_clean_csv=False)
+    clean_csv(args.csv_file)
+
+
+if __name__ == "__main__":
+    main()

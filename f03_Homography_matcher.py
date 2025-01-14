@@ -9,7 +9,7 @@ import numpy as np
 from dotenv import load_dotenv
 from tqdm import tqdm
 
-from f02_SIFT_macher import DescriptorCacheManager, NaiveImageMatcher
+from f02_SIFT_matcher import DescriptorCacheManager, NaiveImageMatcher
 
 # Increase the CSV field size limit
 csv.field_size_limit(sys.maxsize)

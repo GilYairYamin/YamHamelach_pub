@@ -1,11 +1,10 @@
 import os
 from types import SimpleNamespace
 
-from dotenv import dotenv_values, load_dotenv
+from dotenv import dotenv_values
 
 
-def load_env_arguments():
-    # load_dotenv()
+def load_env_arguments(use_clean_csv: bool = True):
     args = dotenv_values()
 
     keys = list(args.keys())
@@ -21,9 +20,13 @@ def load_env_arguments():
     args["image_path"] = os.path.join(args["base_path"], args["images_in"])
     args["patches_path"] = os.path.join(args["base_path"], args["patches_in"])
 
-    args["csv_file"] = os.path.join(
-        args["base_path"], args["clean_sift_matches_w_tp_w_homo"]
+    csv = (
+        args["clean_sift_matches_w_tp_w_homo"]
+        if use_clean_csv
+        else args["sift_matches_w_tp_w_homo"]
     )
+
+    args["csv_file"] = os.path.join(args["base_path"], csv)
 
     args = SimpleNamespace(**args)
     return args

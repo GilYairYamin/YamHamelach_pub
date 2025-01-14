@@ -7,8 +7,9 @@ from typing import Dict, List, Tuple
 
 import cv2
 import numpy as np
-from dotenv import load_dotenv
 from tqdm import tqdm
+
+from env_arguments_loader import load_env_arguments
 
 # Increase the CSV field size limit
 csv.field_size_limit(sys.maxsize)
@@ -238,14 +239,12 @@ class FragmentMatcher:
 
 
 if __name__ == "__main__":
-    load_dotenv()
+    args = load_env_arguments()
 
-    base_path = os.getenv("BASE_PATH")
-    DEBUG = os.getenv("DEBUG")
-    PATCHES_DIR = os.path.join(base_path, os.getenv("PATCHES_IN"))
-    patche_cache_dir = os.path.join(base_path, os.getenv("PATCHES_CACHE"))
+    patches_dir = os.path.join(args.base_path, args.patches_in)
+    patche_cache_dir = os.path.join(args.base_path, args.patches_cache)
 
-    matcher = FragmentMatcher(PATCHES_DIR, patche_cache_dir)
+    matcher = FragmentMatcher(patches_dir, patche_cache_dir)
 
-    _sift_matches = os.path.join(base_path, os.getenv("SIFT_MATCHES"))
-    matcher.run(success_csv=_sift_matches, debug=DEBUG)
+    _sift_matches = os.path.join(args.base_path, args.sift_matches)
+    matcher.run(success_csv=_sift_matches, debug=args.debug)
