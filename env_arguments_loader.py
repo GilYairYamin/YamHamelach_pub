@@ -1,12 +1,11 @@
 import os
-
-
-from dotenv import load_dotenv, dotenv_values
 from types import SimpleNamespace
+
+from dotenv import dotenv_values, load_dotenv
 
 
 def load_env_arguments():
-    load_dotenv()
+    # load_dotenv()
     args = dotenv_values()
 
     keys = list(args.keys())

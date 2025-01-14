@@ -6,10 +6,11 @@ from types import SimpleNamespace
 
 import cv2
 import numpy as np
-from dotenv import load_dotenv
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 from ultralytics import YOLO
+
+from env_arguments_loader import load_env_arguments
 
 
 def center(box, dtype=None):
@@ -158,17 +159,7 @@ class PatchFinder:
 
 
 def load_args():
-    load_dotenv()
-    args = {}
-    args["base_path"] = os.getenv("BASE_PATH")
-    args["images_in"] = os.path.join(args["base_path"], os.getenv("IMAGES_IN"))
-    args["patches_dir"] = os.path.join(
-        args["base_path"], os.getenv("PATCHES_IN")
-    )
-    args["bbox_dir"] = os.path.join(args["base_path"], os.getenv("BBOXES_IN"))
-    args["model_nn_weights"] = os.path.join(
-        args["base_path"], os.getenv("MODEL_NN_WEIGHTS")
-    )
+    args = load_env_arguments()
 
     parser = ArgumentParser()
     parser.add_argument(
@@ -190,9 +181,9 @@ def load_args():
     parser.add_argument(
         "--cp", help="yolov8 cp path", default=args["model_nn_weights"]
     )
-    args.update(parser.parse_args())
-    args = SimpleNamespace(**args)
-    return args
+
+    parsed_args = parser.parse_args()
+    return SimpleNamespace(**args, **parsed_args)
 
 
 if __name__ == "__main__":

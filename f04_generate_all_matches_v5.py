@@ -465,7 +465,7 @@ def loop_over_csv(
         gc.collect()
 
 
-def load_arguments_test():
+def load_arguments():
     args: SimpleNamespace = load_env_arguments()
 
     args.matches_df = pd.read_csv(args.csv_file)
@@ -498,12 +498,12 @@ def load_arguments_test():
     parser.add_argument(
         "--image1",
         help="Optional: specific first image to process",
-        # default="M42970-1-E.jpg",
+        default="M42970-1-E.jpg",
     )
     parser.add_argument(
         "--image2",
         help="Optional: specific second image to process",
-        # default="M43003-1-E.jpg",
+        default="M43003-1-E.jpg",
     )
 
     parser.add_argument(
@@ -516,7 +516,7 @@ def load_arguments_test():
 
 def main():
     # Setup argument parser for optional parameters
-    args = load_arguments_test()
+    args = load_arguments()
 
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
