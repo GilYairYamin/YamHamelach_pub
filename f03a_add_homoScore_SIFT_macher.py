@@ -87,10 +87,10 @@ for index, row in tqdm(df.iterrows(), total=len(df)):
 df.dropna(inplace=True)
 
 mask = (
-    (df["sum_homo_err"] < 0)
-    | (df["len_homo_err"] < 0)
-    | (df["mean_homo_err"] < 0)
-    | (df["std_homo_err"] < 0)
+    (df["sum_homo_err"] >= 0)
+    | (df["len_homo_err"] >= 0)
+    | (df["mean_homo_err"] >= 0)
+    | (df["std_homo_err"] >= 0)
     | (df["is_valid"])
 )
 valid_df = df[mask]
@@ -98,9 +98,6 @@ valid_df = df[mask]
 
 # Save the updated CSV file
 valid_df.to_csv(csv_sift_matches_w_tp_w_homo, index=False)
-
-# Save the updated CSV file
-df.to_csv(csv_sift_matches_w_tp_w_homo, index=False)
 
 print(
     f"Processing completed. The updated CSV file has been saved as {csv_sift_matches_w_tp_w_homo}."

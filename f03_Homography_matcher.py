@@ -6,9 +6,9 @@ from typing import List, Tuple
 
 import cv2
 import numpy as np
-from dotenv import load_dotenv
 from tqdm import tqdm
 
+from env_arguments_loader import load_env_arguments
 from f02_SIFT_matcher import DescriptorCacheManager, NaiveImageMatcher
 
 # Increase the CSV field size limit
@@ -145,24 +145,22 @@ def read_image_pairs_from_csv(csv_file: str):
 
 # Example usage
 if __name__ == "__main__":
-    load_dotenv()
-    DEBUG = os.getenv("DEBUG")
-    base_path = os.getenv("BASE_PATH")
+    args = load_env_arguments()
 
-    _sift_matches = os.path.join(base_path, os.getenv("SIFT_MATCHES"))
+    _sift_matches = os.path.join(args.base_path, args.sift_matches)
     if not os.path.exists(_sift_matches):
         raise FileNotFoundError(
             f"SIFT matches file not found at {_sift_matches}"
         )
 
-    image_cache_dir = os.path.join(base_path, os.getenv("PATCHES_CACHE"))
+    image_cache_dir = os.path.join(args.base_path, args.patches_cache)
 
     descriptor_cache = DescriptorCacheManager(image_cache_dir)
     matcher = NaiveImageMatcher(descriptor_cache)
-    HOMOGRAPHY_CACHE_DIR = os.path.join(
-        base_path, os.getenv("HOMOGRAPHY_CACHE")
-    )
-    error_cache = ErrorCacheManager(HOMOGRAPHY_CACHE_DIR)
+    homography_cache_dir = os.path.join(args.base_path, args.homography_cache)
+
+    error_cache = ErrorCacheManager(homography_cache_dir)
+
     error_calculator = HomographyErrorCalculator(
         matcher, error_cache, descriptor_cache
     )

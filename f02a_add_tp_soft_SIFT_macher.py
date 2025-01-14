@@ -1,8 +1,9 @@
 import os
 
 import pandas as pd
-from dotenv import load_dotenv
 from tqdm import tqdm
+
+from env_arguments_loader import load_env_arguments
 
 
 class PamProcessor:
@@ -124,18 +125,16 @@ class PamProcessor:
 
 
 if __name__ == "__main__":
-    load_dotenv()
+    args = load_env_arguments()
 
     # Access the environment variables
-    base_path = os.getenv("BASE_PATH")
-    PATCHES_IN = os.path.join(base_path, os.getenv("PATCHES_IN"))
-    CSV_IN = os.path.join(base_path, os.getenv("CSV_IN"))
-    _sift_matches = os.path.join(base_path, os.getenv("SIFT_MATCHES"))
-    _sift_matches_w_tp = os.getenv("SIFT_MATCHES_W_TP")
+    patches_dir = os.path.join(args.base_path, args.patches_in)
+    CSV_IN = os.path.join(args.base_path, args.csv_in)
+    _sift_matches = os.path.join(args.base_path, args.sift_matches)
 
     # Define output filename
-    output_filename = os.path.join(base_path, _sift_matches_w_tp)
+    output_filename = os.path.join(args.base_path, args.sift_matches_w_tp)
 
     # Initialize and run the processor
-    pam_processor = PamProcessor(PATCHES_IN, CSV_IN, _sift_matches)
+    pam_processor = PamProcessor(patches_dir, CSV_IN, _sift_matches)
     pam_processor.process_and_save_matches(output_filename, top_n=-1)
