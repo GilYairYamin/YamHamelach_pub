@@ -1,6 +1,7 @@
 import argparse
 import gc
 import json
+import math
 import os
 from types import SimpleNamespace
 from typing import Dict, List, Tuple
@@ -158,8 +159,6 @@ def get_image_patches(
     matches_df: pd.DataFrame,
     img1_name: str,
     img2_name: str,
-    distance_threshold: int,
-    match_metric: str = "mean_homo_err",
 ):
     image_matches = matches_df[
         (
@@ -173,9 +172,9 @@ def get_image_patches(
     ]
 
     # image_matches = image_matches[
-    #     image_matches[match_metric] <= distance_threshold
+    #     image_matches["mean_homo_err"] <= distance_threshold
     # ]
-    match_scores = image_matches[match_metric].tolist()
+    match_scores = image_matches["mean_homo_err"].tolist()
 
     return image_matches, match_scores
 
@@ -197,48 +196,23 @@ def get_patches_info(row, img1_name, patches_path):
     return patch1_info, patch2_info
 
 
-def visualize_image_matches(
-    img1_name: str,
-    img2_name: str,
-    matches_df: pd.DataFrame,
-    base_path: str,
-    patches_path: str,
-    image_path: str,
-    output_dir: str,
-    distance_threshold: int = 25,
-    homo_err_threshold: float = 100,
-    match_metric: str = "mean_homo_err",
+def create_visualized_image(
+    img1,
+    img2,
+    img1_name,
+    img2_name,
+    match_scores,
+    image_matches,
+    patches_path,
+    output_dir,
+    debugger,
     debug: bool = False,
+    part_amount: int = 1,
+    part: int = 1,
 ):
-    # Initialize debugger
-    debugger = MatchDebugger(debug)
-
-    filtered_df = matches_df[
-        (matches_df["distance"] >= distance_threshold)
-        & (matches_df[match_metric] <= homo_err_threshold)
-    ]
-
-    # Load images
-    img1 = load_image(os.path.join(image_path, img1_name))
-    img2 = load_image(os.path.join(image_path, img2_name))
-
-    if img1 is None or img2 is None:
-        return
-
-    debugger.log_image_info(img1_name, img2_name, img1, img2)
-
-    image_matches, match_scores = get_image_patches(
-        filtered_df, img1_name, img2_name, homo_err_threshold
-    )
-
-    if image_matches.empty:
-        print("didn't find matches", flush=True)
-        return
-
-    # csv_name = f"{img1_name}_vs_{img2_name}.csv"
-    # csv_path = os.path.join(output_dir, csv_name)
-    # image_matches.to_csv(csv_path)
-
+    proccessing = f"Processing pair: {img1_name} - {img2_name}"
+    processing_parts = f"Part {part} of {part_amount}"
+    print(f"{proccessing} - {processing_parts}")
     (
         fig,
         ax1,
@@ -259,7 +233,7 @@ def visualize_image_matches(
 
     distance = -1
     for idx, row in image_matches.iterrows():
-        distance = row[match_metric]
+        distance = row["mean_homo_err"]
         debugger.log_match_info(idx, img1_name, img2_name, distance)
 
         patch1_info, patch2_info = get_patches_info(
@@ -383,8 +357,9 @@ def visualize_image_matches(
     base_name2 = img2_name.split(".")[0]
 
     name_base = f"{base_name1}_{base_name2}_s{avg_score}"
-    name_ending = f"patches_dist{distance:.2f}.jpg"
-    file_name = f"{name_base}_{name_ending}.jpg"
+    name_parts = f"p{part}OF{part_amount}" if part_amount > 1 else ""
+    name_ending = f"patches_dist{distance:.2f}"
+    file_name = f"{name_base}_{name_parts}_{name_ending}.jpg"
 
     output_file = os.path.join(output_dir, file_name)
 
@@ -392,37 +367,99 @@ def visualize_image_matches(
     plt.close()
 
 
+def visualize_image_matches(
+    img1_name: str,
+    img2_name: str,
+    matches_df: pd.DataFrame,
+    base_path: str,
+    patches_path: str,
+    image_path: str,
+    output_dir: str,
+    max_matches: int = 5,
+    debug: bool = False,
+):
+    # Initialize debugger
+    debugger = MatchDebugger(debug)
+
+    # Load images
+    img1 = load_image(os.path.join(image_path, img1_name))
+    img2 = load_image(os.path.join(image_path, img2_name))
+
+    if img1 is None or img2 is None:
+        return
+
+    debugger.log_image_info(img1_name, img2_name, img1, img2)
+
+    image_matches, match_scores = get_image_patches(
+        matches_df, img1_name, img2_name
+    )
+
+    if image_matches.empty:
+        print("didn't find matches", flush=True)
+        return
+
+    if len(match_scores) <= max_matches:
+        create_visualized_image(
+            img1,
+            img2,
+            img1_name,
+            img2_name,
+            match_scores,
+            image_matches,
+            patches_path,
+            output_dir,
+            debugger,
+            debug,
+        )
+        return
+
+    for i in range(0, len(match_scores), max_matches):
+        create_visualized_image(
+            img1,
+            img2,
+            img1_name,
+            img2_name,
+            match_scores[i : i + max_matches],
+            image_matches[i : i + max_matches],
+            patches_path,
+            output_dir,
+            debugger,
+            debug,
+            part=i // max_matches + 1,
+            part_amount=math.ceil(len(match_scores) / max_matches),
+        )
+
+
+def remove_extenstion(val):
+    return os.path.basename(val).split("_")[0] + ".jpg"
+
+
 def find_unique_pairs(
     matches_df: pd.DataFrame,
     image_list: list[str] = None,
 ):
-    image_pairs = set()
+    unique_pairs = []
     if image_list is not None:
-        image_pairs = set(
-            [
-                tuple(sorted([img1, img2]))
-                for img1 in image_list
-                for img2 in image_list
-                if img1 != img2
-            ]
+        df_1 = pd.DataFrame(image_list, columns=["file1"])
+        df_2 = df_1.copy()
+        df_2.rename(columns={"file1": "file2"}, inplace=True)
+        unique_pairs = df_1.join(df_2, how="cross")
+
+    else:
+        unique_pairs = matches_df[["file1", "file2"]]
+        unique_pairs.loc[:, "file1"] = unique_pairs["file1"].apply(
+            remove_extenstion
         )
-        return image_pairs
+        unique_pairs.loc[:, "file2"] = unique_pairs["file2"].apply(
+            remove_extenstion
+        )
 
-    def remove_extenstion(val):
-        return os.path.basename(val).split("_")[0] + ".jpg"
-
-    unique_pairs = matches_df[["file1", "file2"]]
-    unique_pairs.loc[:, "file1"] = unique_pairs["file1"].apply(
-        remove_extenstion
-    )
-    unique_pairs.loc[:, "file2"] = unique_pairs["file2"].apply(
-        remove_extenstion
-    )
     unique_pairs.drop_duplicates(inplace=True)
 
     unique_pairs = unique_pairs[unique_pairs["file1"] != unique_pairs["file2"]]
     print(f"found {len(unique_pairs)} combinations")
 
+    image_pairs = set()
     # Process all unique image pairs
     for _, row in unique_pairs.iterrows():
         pair = tuple(sorted([row["file1"], row["file2"]]))
@@ -438,10 +475,7 @@ def loop_over_csv(
     patches_path: str,
     image_path: str,
     output_dir: str,
-    distance_threshold: int = 25,
-    homo_err_threshold: float = 100,
     image_list: list[str] = None,
-    match_metric: str = "mean_homo_err",
     debug: bool = False,
 ):
     image_pairs = find_unique_pairs(matches_df, image_list)
@@ -457,9 +491,6 @@ def loop_over_csv(
             patches_path,
             image_path,
             output_dir,
-            distance_threshold,
-            homo_err_threshold,
-            match_metric=match_metric,
             debug=debug,
         )
         gc.collect()
@@ -478,32 +509,28 @@ def load_arguments():
     )
 
     # sum_homo_err, len_homo_err, mean_homo_err, std_homo_err
-    parser.add_argument(
-        "--match_metric",
-        default="mean_homo_err",
-        help="The metric used for determining distance.",
-    )
+
     parser.add_argument(
         "--distance_threshold",
         type=int,
-        default=20,
+        default=15,
         help="Distance threshold for filtering matches",
     )
     parser.add_argument(
         "--homo_err_threshold",
         type=float,
-        default=50,
+        default=75,
         help="Distance threshold for filtering matches",
     )
     parser.add_argument(
         "--image1",
         help="Optional: specific first image to process",
-        default="M42970-1-E.jpg",
+        # default="M42970-1-E.jpg",
     )
     parser.add_argument(
         "--image2",
         help="Optional: specific second image to process",
-        default="M43003-1-E.jpg",
+        # default="M43003-1-E.jpg",
     )
 
     parser.add_argument(
@@ -514,9 +541,35 @@ def load_arguments():
     return SimpleNamespace(**parsed_args.__dict__, **args.__dict__)
 
 
+def max_acceptable_error(poi_matches: int):
+    # You can adjust the relationship as needed. Example:
+    if poi_matches < 10:
+        return 0
+
+    return (1 - math.pow(math.e, -0.04 * poi_matches)) * 100
+
+
+def filter_df(
+    matches_df: pd.DataFrame, minimum_point_amount: int, maxiumum_err: float
+):
+    # Add a new column for the threshold
+    matches_df["max_error_threshold"] = matches_df["distance"].apply(
+        max_acceptable_error
+    )
+
+    filtered_df = matches_df[
+        matches_df["mean_homo_err"] <= matches_df["max_error_threshold"]
+    ]
+    return filtered_df
+
+
 def main():
     # Setup argument parser for optional parameters
     args = load_arguments()
+
+    args.matches_df = filter_df(
+        args.matches_df, args.distance_threshold, args.homo_err_threshold
+    )
 
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
@@ -531,9 +584,6 @@ def main():
             args.patches_path,
             args.image_path,
             args.output_dir,
-            args.distance_threshold,
-            args.homo_err_threshold,
-            match_metric=args.match_metric,
             debug=args.debug,
         )
         return
@@ -545,10 +595,7 @@ def main():
             args.patches_path,
             args.image_path,
             args.output_dir,
-            args.distance_threshold,
-            args.homo_err_threshold,
             args.pam_files_to_process,
-            match_metric=args.match_metric,
             debug=args.debug,
         )
     except Exception as e:

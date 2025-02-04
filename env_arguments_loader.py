@@ -28,10 +28,5 @@ def load_env_arguments(use_clean_csv: bool = True):
 
     args["csv_file"] = os.path.join(args["base_path"], csv)
 
-    if "debug" not in args.keys():
-        args["debug"] = False
-    else:
-        args["debug"] = args["debug"].lower() == "true"
-
     args = SimpleNamespace(**args)
     return args
