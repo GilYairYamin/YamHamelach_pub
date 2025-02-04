@@ -210,6 +210,8 @@ def create_visualized_image(
     part_amount: int = 1,
     part: int = 1,
 ):
+    colors = ["yellow", "red", "blue", "green", "orange"]
+
     proccessing = f"Processing pair: {img1_name} - {img2_name}"
     processing_parts = f"Part {part} of {part_amount}"
     print(f"{proccessing} - {processing_parts}")
@@ -232,6 +234,7 @@ def create_visualized_image(
         avg_score = 0
 
     distance = -1
+    color_index = -1
     for idx, row in image_matches.iterrows():
         distance = row["mean_homo_err"]
         debugger.log_match_info(idx, img1_name, img2_name, distance)
@@ -243,23 +246,18 @@ def create_visualized_image(
         if patch1_info is None or patch2_info is None:
             continue
 
+        color_index = (color_index + 1) % len(colors)
         debugger.log_patch_info(patch1_info, patch2_info)
 
+        patch1_num = patch1_info["filename"].split("_")[1].split(".")[0]
+        patch2_num = patch2_info["filename"].split("_")[1].split(".")[0]
         # Draw rectangles
-        color = (
-            "yellow"
-            if not debug
-            else np.random.rand(
-                3,
-            )
-        )
-
         rect1 = Rectangle(
             (patch1_info["coordinates"][0], patch1_info["coordinates"][1]),
             patch1_info["coordinates"][2] - patch1_info["coordinates"][0],
             patch1_info["coordinates"][3] - patch1_info["coordinates"][1],
             fill=False,
-            edgecolor=color,
+            edgecolor=colors[color_index],
             linewidth=1,
         )
 
@@ -268,7 +266,7 @@ def create_visualized_image(
             patch2_info["coordinates"][2] - patch2_info["coordinates"][0],
             patch2_info["coordinates"][3] - patch2_info["coordinates"][1],
             fill=False,
-            edgecolor=color,
+            edgecolor=colors[color_index],
             linewidth=1,
         )
 
@@ -330,12 +328,29 @@ def create_visualized_image(
             [fig_x1, fig_x2],
             [fig_y1, fig_y2],
             transform=fig.transFigure,
-            color=color,
+            color=colors[color_index],
             alpha=0.5,
             linestyle="-",
             linewidth=1,
         )
         fig.lines.append(line)
+
+        fig.text(
+            fig_x1,
+            fig_y1,
+            f"{patch1_num}",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+        )
+        fig.text(
+            fig_x2,
+            fig_y2,
+            f"{patch2_num}",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+        )
 
         # Add distance text
         text_x = (fig_x1 + fig_x2) / 2
@@ -356,10 +371,11 @@ def create_visualized_image(
     base_name1 = img1_name.split(".")[0]
     base_name2 = img2_name.split(".")[0]
 
-    name_base = f"{base_name1}_{base_name2}_s{avg_score}"
-    name_parts = f"p{part}OF{part_amount}" if part_amount > 1 else ""
+    name_base = f"{base_name1}_{base_name2}"
+    name_score = f"avgScore{avg_score}"
+    name_parts = f"p{part}_OF_{part_amount}" if part_amount > 1 else ""
     name_ending = f"patches_dist{distance:.2f}"
-    file_name = f"{name_base}_{name_parts}_{name_ending}.jpg"
+    file_name = f"{name_base}_{name_parts}_{name_ending}_{name_score}.jpg"
 
     output_file = os.path.join(output_dir, file_name)
 
@@ -546,7 +562,7 @@ def max_acceptable_error(poi_matches: int):
     if poi_matches < 10:
         return 0
 
-    return (1 - math.pow(math.e, -0.04 * poi_matches)) * 100
+    return (1 - math.pow(math.e, -0.025 * poi_matches)) * 100
 
 
 def filter_df(

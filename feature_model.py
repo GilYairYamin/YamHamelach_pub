@@ -52,8 +52,10 @@ if __name__ == "__main__":
     Y = dumies[["label_False", "label_True"]].values
     Y = Y.astype(int)
 
-    X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(
-        X, Y, test_size=0.3, random_state=42
+    X_train, X_test, y_train, y_test = (
+        sklearn.model_selection.train_test_split(
+            X, Y, test_size=0.3, random_state=42
+        )
     )
 
     history = model_NN.fit(
