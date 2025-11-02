@@ -19,6 +19,7 @@ def load_env_arguments(use_clean_csv: bool = True):
 
     args["image_path"] = os.path.join(args["base_path"], args["images_in"])
     args["patches_path"] = os.path.join(args["base_path"], args["patches_dir"])
+    args["bbox_dir"] = os.path.join(args["base_path"], args["bbox_in"])
 
     csv = (
         args["clean_sift_matches_w_tp_w_homo"]
