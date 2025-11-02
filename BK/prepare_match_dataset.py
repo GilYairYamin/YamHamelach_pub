@@ -46,7 +46,10 @@ def print_unique_file_names(csv_file_path):
         print(file_name)
 
 
-from aux_function import load_pam_files_to_process, print_matched_pam_files
+from older_files.aux_function import (
+    load_pam_files_to_process,
+    print_matched_pam_files,
+)
 
 if __name__ == "__main__":
     print("Loading PAM files...")

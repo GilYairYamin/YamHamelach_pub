@@ -10,7 +10,7 @@ from tqdm import tqdm
 from dotenv import load_dotenv
 
 from PAM_matcher import CSVMatcher, FeatureBasedMatcher, save_match_figure
-from aux_function import load_pam_files_to_process, print_matched_pam_files
+from older_files.aux_function import load_pam_files_to_process, print_matched_pam_files
 
 # Set a random seed based on the current time
 np.random.seed(datetime.now().microsecond)
