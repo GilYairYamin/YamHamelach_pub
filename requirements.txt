@@ -8,4 +8,3 @@ scikit-learn
 streamlit
 dropbox
 python-dotenv  
-tqdm

@@ -126,9 +126,7 @@ class ImagePatchExtractor:
         _patch_info (dict): Metadata dictionary for extracted patches
     """
 
-    def __init__(
-        self, model_path, model_type="auto", confidence_threshold=0.5
-    ):
+    def __init__(self, model_path, model_type="auto", confidence_threshold=0.5):
         """
         Initialize ImagePatchExtractor with a model checkpoint.
 
@@ -148,15 +146,14 @@ class ImagePatchExtractor:
         self.image = None
         self._model_path = model_path
         self._confidence_threshold = confidence_threshold
-        self._device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
-        )
+        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self._img_filename = None
         self._extracted_boxes = None
         self._scores = None
         self._id_map = None
         self._tags = []
         self._patch_info = {}
+        self._patch_info_coco = {}
 
         # Determine model type
         if model_type == "auto":
@@ -203,9 +200,7 @@ class ImagePatchExtractor:
         """
         if self._model_type == ModelType.YOLO:
             if not YOLO_AVAILABLE:
-                raise ImportError(
-                    "ultralytics package is required for YOLO models"
-                )
+                raise ImportError("ultralytics package is required for YOLO models")
             return YOLO(self._model_path)
 
         elif self._model_type == ModelType.FASTER_RCNN:
@@ -242,10 +237,7 @@ class ImagePatchExtractor:
             The ID map is regenerated if the image dimensions change or if it
             doesn't exist yet.
         """
-        if (
-            self._id_map is None
-            or self._id_map.shape[:2] != self.image.shape[:2]
-        ):
+        if self._id_map is None or self._id_map.shape[:2] != self.image.shape[:2]:
             cols, rows = (32, 32)
             ids = np.arange(rows * cols)
             self._id_map = ids.reshape((cols, rows))
@@ -256,9 +248,7 @@ class ImagePatchExtractor:
             )
         return self._id_map
 
-    def _predict_yolo(
-        self, model_input_shape=(640, 640), patch_cls_name="patch"
-    ):
+    def _predict_yolo(self, model_input_shape=(640, 640), patch_cls_name="patch"):
         """
         Detect patches using YOLO model.
 
@@ -312,9 +302,7 @@ class ImagePatchExtractor:
         Detect patches using Faster R-CNN model.
         """
         # Convert image to PIL and then to tensor
-        pil_image = Image.fromarray(
-            cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB)
-        )
+        pil_image = Image.fromarray(cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB))
         pil_image = ImageOps.exif_transpose(pil_image)
 
         # Convert to tensor
@@ -403,10 +391,39 @@ class ImagePatchExtractor:
             >>> pf.image.shape
             (1080, 1920, 3)
         """
+
         self._img_filename = img_filename
         self.image = cv2.imread(img_filename)
         self._tags = []
         self._patch_info = {}
+
+        img_filename_basename = Path(img_filename).name
+        image_shape = self.image.shape
+        self._patch_info_coco = {
+            "licenses": [{"name": "", "id": 0, "url": ""}],
+            "info": {
+                "contributor": "",
+                "date_created": "",
+                "description": "",
+                "url": "",
+                "version": "",
+                "year": "",
+            },
+            "categories": [{"id": 1, "name": "patch", "supercategory": ""}],
+            "images": [
+                {
+                    "id": 1,
+                    "width": image_shape[1],
+                    "height": image_shape[0],
+                    "file_name": img_filename_basename,
+                    "license": 0,
+                    "flickr_url": "",
+                    "coco_url": "",
+                    "date_captured": 0,
+                }
+            ],
+            "annotations": [],
+        }
 
     @property
     def tags(self):
@@ -457,9 +474,7 @@ class ImagePatchExtractor:
         for i, box in enumerate(self._extracted_boxes):
             (left, top, right, bottom) = box
             c = np.random.randint(0, 125, 3)
-            im = cv2.rectangle(
-                im, (left, top), (right, bottom), c.tolist(), 10
-            )
+            im = cv2.rectangle(im, (left, top), (right, bottom), c.tolist(), 10)
 
             tag = self.tags[i]
             confidence = self._scores[i] if self._scores else 1.0
@@ -531,15 +546,15 @@ class ImagePatchExtractor:
         """
         os.makedirs(path, exist_ok=True)
         img = np.array(self.image)
+        annotations_lst = self._patch_info_coco["annotations"]
         for i, box in enumerate(self._extracted_boxes):
             (left, top, right, bottom) = box
             patch = img[top:bottom, left:right]
             tag = self.tags[i]
             confidence = self._scores[i] if self._scores else 1.0
 
-            filename = Path(
-                path, f"{Path(self._img_filename).stem}_{tag}"
-            ).with_suffix(".jpg")
+            img_filename = Path(self._img_filename).stem
+            filename = Path(path, f"{img_filename}_{tag}").with_suffix(".jpg")
             plt.imsave(filename, patch)
 
             # Store patch information
@@ -549,6 +564,22 @@ class ImagePatchExtractor:
                 "confidence": float(confidence),
                 "model_type": self._model_type.value,
             }
+
+            width = right - left
+            height = bottom - top
+            area = width * height
+
+            coco_annotation = {
+                "id": int(tag),
+                "image_id": 1,
+                "category_id": 1,
+                "segmentation": [],
+                "area": area,
+                "bbox": [left, top, width, height],
+                "iscrowd": 0,
+                "attributes": {"occluded": "false", "rotation": 0.0},
+            }
+            annotations_lst.append(coco_annotation)
 
     def save_patch_info(self, path):
         """
@@ -578,11 +609,42 @@ class ImagePatchExtractor:
             >>> pf.save_patch_info("output/patches/")
             # Creates: image1_patch_info.json
         """
-        info_file = Path(
-            path, f"{Path(self._img_filename).stem}_patch_info.json"
-        )
+        info_file = Path(path, f"{Path(self._img_filename).stem}_patch_info.json")
         with open(info_file, "w") as file:
             json.dump(self._patch_info, file, indent=2)
+
+    def save_patch_info_coco(self, path):
+        """
+        Save patch metadata to a JSON file.
+
+        Creates a JSON file containing information about all extracted patches,
+        including their filenames, bounding box coordinates, confidence scores,
+        and model type used. This metadata can be used for further processing
+        or analysis.
+
+        Args:
+            path (str or Path): Directory where the JSON file will be saved.
+                              File is named "{original_stem}_patch_info.json"
+
+        JSON Structure:
+            {
+                "tag1": {
+                    "filename": "image_tag1.jpg",
+                    "coordinates": [left, top, right, bottom],
+                    "confidence": 0.95,
+                    "model_type": "yolo"
+                },
+                "tag2": { ... }
+            }
+
+        Example:
+            >>> pf.save_patch_info("output/patches/")
+            # Creates: image1_patch_info.json
+        """
+
+        info_file = Path(path, f"{Path(self._img_filename).stem}_patch_info_coco.json")
+        with open(info_file, "w") as file:
+            json.dump(self._patch_info_coco, file, indent=2)
 
     def save_to_csv(self, csv_path):
         """
@@ -700,11 +762,11 @@ def load_args():
 if __name__ == "__main__":
     """
     Main execution block for batch processing images.
-    
+
     Processes all JPEG images in the input directory, detecting patches using
-    either YOLO or Faster R-CNN models, saving visualization images, extracting 
+    either YOLO or Faster R-CNN models, saving visualization images, extracting
     individual patches, and storing metadata files.
-    
+
     Processing Steps:
     1. Load configuration arguments
     2. Create output directories
@@ -716,7 +778,7 @@ if __name__ == "__main__":
        - Extract and save individual patches
        - Save patch metadata
        - Save CSV results (for compatibility)
-    
+
     Progress is displayed using tqdm progress bar.
     """
     args = load_args()
@@ -725,13 +787,9 @@ if __name__ == "__main__":
     patches_path = (
         args.base_path + "/OUTPUT_" + args.model_type + "/" + args.patches_dir
     )
-    bbox_path = (
-        args.base_path + "/OUTPUT_" + args.model_type + "/" + args.bbox_dir
-    )
+    bbox_path = args.base_path + "/OUTPUT_" + args.model_type + "/" + args.bbox_dir
     if not os.path.exists(image_path):
-        raise FileNotFoundError(
-            f"Input directory '{image_path}' does not exist."
-        )
+        raise FileNotFoundError(f"Input directory '{image_path}' does not exist.")
 
     os.makedirs(patches_path, exist_ok=True)
     os.makedirs(bbox_path, exist_ok=True)
@@ -766,6 +824,9 @@ if __name__ == "__main__":
 
             # Save patch information as JSON
             patch_finder.save_patch_info(patches_filepath)
+
+            # Save patch information as JSON in COCO format
+            patch_finder.save_patch_info_coco(patches_filepath)
 
             # Save results as CSV (for compatibility with existing workflows)
             csv_filename = Path(patches_filepath, f"{img_filename.stem}.csv")

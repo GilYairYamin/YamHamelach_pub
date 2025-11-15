@@ -5,13 +5,13 @@ from dotenv import dotenv_values
 
 
 def load_env_arguments(use_clean_csv: bool = True):
-    args = dotenv_values()
+    raw_args = dotenv_values()
+    args = {}
 
-    keys = list(args.keys())
+    keys = list(raw_args.keys())
     for key in keys:
         new_key = key.lower()
-        args[new_key] = args[key]
-        del args[key]
+        args[new_key] = raw_args[key]
 
     if args["pam_files_to_process"] is not None:
         args["pam_files_to_process"] = args["pam_files_to_process"].split(",")
@@ -19,7 +19,6 @@ def load_env_arguments(use_clean_csv: bool = True):
 
     args["image_path"] = os.path.join(args["base_path"], args["images_in"])
     args["patches_path"] = os.path.join(args["base_path"], args["patches_dir"])
-    args["bbox_dir"] = os.path.join(args["base_path"], args["bbox_in"])
 
     csv = (
         args["clean_sift_matches_w_tp_w_homo"]

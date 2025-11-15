@@ -7,11 +7,9 @@
 /share/*
 /__pycache__/*
 
+/local_data
+/.venv
+/.vscode
+
 **/__pycache__
 
-
-/local_data
-/.vscode
-/.conda
-/.vscode
-/.venv
