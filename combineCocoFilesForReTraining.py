@@ -1,17 +1,9 @@
 import json
 import os
 from argparse import ArgumentParser
-from pathlib import Path
 from types import SimpleNamespace
-from enum import Enum
 
-import cv2
-import numpy as np
-from matplotlib import pyplot as plt
 from tqdm import tqdm
-import torch
-import torchvision
-from PIL import Image, ImageOps
 
 from env_arguments_loader import load_env_arguments
 
@@ -91,28 +83,31 @@ def main():
         "images": [],
         "annotations": [],
     }
-    
+
     result_images = result["images"]
     result_annotations = result["annotations"]
 
-    for idx, image_dir in enumerate(image_dirs, 1):
+    for idx, image_dir in tqdm(enumerate(image_dirs, 1)):
         image_name = os.path.basename(image_dir)
-        coco_filepath = os.path.join(patches_dir, image_dir, f"{image_name}_patch_info_coco.json")
+        coco_filepath = os.path.join(
+            patches_dir, image_dir, f"{image_name}_patch_info_coco.json"
+        )
         with open(coco_filepath, mode="r+") as coco_file:
             coco_dict = json.load(coco_file)
 
         image = coco_dict["images"][0]
         image["id"] = idx
         result_images.append(image)
-        
+
         annotations = coco_dict["annotations"]
         for annotation in annotations:
             annotation["image_id"] = idx
             result_annotations.append(annotation)
-    
+
     res_file_path = os.path.join(patches_dir, "coco_annotations.json")
     with open(res_file_path, "w") as file:
         json.dump(result, file, indent=2)
+
 
 if __name__ == "__main__":
     main()

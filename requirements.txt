@@ -7,4 +7,4 @@ tensorflow
 scikit-learn
 streamlit
 dropbox
-python-dotenv  
+python-dotenv 
