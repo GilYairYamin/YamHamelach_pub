@@ -24,17 +24,17 @@ Dependencies:
 import json
 import os
 from argparse import ArgumentParser
+from enum import Enum
 from pathlib import Path
 from types import SimpleNamespace
-from enum import Enum
 
 import cv2
 import numpy as np
-from matplotlib import pyplot as plt
-from tqdm import tqdm
 import torch
 import torchvision
+from matplotlib import pyplot as plt
 from PIL import Image, ImageOps
+from tqdm import tqdm
 
 # Try to import YOLO, make it optional
 try:
@@ -126,7 +126,9 @@ class ImagePatchExtractor:
         _patch_info (dict): Metadata dictionary for extracted patches
     """
 
-    def __init__(self, model_path, model_type="auto", confidence_threshold=0.5):
+    def __init__(
+        self, model_path, model_type="auto", confidence_threshold=0.5
+    ):
         """
         Initialize ImagePatchExtractor with a model checkpoint.
 
@@ -146,7 +148,9 @@ class ImagePatchExtractor:
         self.image = None
         self._model_path = model_path
         self._confidence_threshold = confidence_threshold
-        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
         self._img_filename = None
         self._extracted_boxes = None
         self._scores = None
@@ -200,7 +204,9 @@ class ImagePatchExtractor:
         """
         if self._model_type == ModelType.YOLO:
             if not YOLO_AVAILABLE:
-                raise ImportError("ultralytics package is required for YOLO models")
+                raise ImportError(
+                    "ultralytics package is required for YOLO models"
+                )
             return YOLO(self._model_path)
 
         elif self._model_type == ModelType.FASTER_RCNN:
@@ -237,7 +243,10 @@ class ImagePatchExtractor:
             The ID map is regenerated if the image dimensions change or if it
             doesn't exist yet.
         """
-        if self._id_map is None or self._id_map.shape[:2] != self.image.shape[:2]:
+        if (
+            self._id_map is None
+            or self._id_map.shape[:2] != self.image.shape[:2]
+        ):
             cols, rows = (32, 32)
             ids = np.arange(rows * cols)
             self._id_map = ids.reshape((cols, rows))
@@ -248,7 +257,9 @@ class ImagePatchExtractor:
             )
         return self._id_map
 
-    def _predict_yolo(self, model_input_shape=(640, 640), patch_cls_name="patch"):
+    def _predict_yolo(
+        self, model_input_shape=(640, 640), patch_cls_name="patch"
+    ):
         """
         Detect patches using YOLO model.
 
@@ -302,7 +313,9 @@ class ImagePatchExtractor:
         Detect patches using Faster R-CNN model.
         """
         # Convert image to PIL and then to tensor
-        pil_image = Image.fromarray(cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB))
+        pil_image = Image.fromarray(
+            cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB)
+        )
         pil_image = ImageOps.exif_transpose(pil_image)
 
         # Convert to tensor
@@ -474,7 +487,9 @@ class ImagePatchExtractor:
         for i, box in enumerate(self._extracted_boxes):
             (left, top, right, bottom) = box
             c = np.random.randint(0, 125, 3)
-            im = cv2.rectangle(im, (left, top), (right, bottom), c.tolist(), 10)
+            im = cv2.rectangle(
+                im, (left, top), (right, bottom), c.tolist(), 10
+            )
 
             tag = self.tags[i]
             confidence = self._scores[i] if self._scores else 1.0
@@ -609,7 +624,9 @@ class ImagePatchExtractor:
             >>> pf.save_patch_info("output/patches/")
             # Creates: image1_patch_info.json
         """
-        info_file = Path(path, f"{Path(self._img_filename).stem}_patch_info.json")
+        info_file = Path(
+            path, f"{Path(self._img_filename).stem}_patch_info.json"
+        )
         with open(info_file, "w") as file:
             json.dump(self._patch_info, file, indent=2)
 
@@ -642,7 +659,9 @@ class ImagePatchExtractor:
             # Creates: image1_patch_info.json
         """
 
-        info_file = Path(path, f"{Path(self._img_filename).stem}_patch_info_coco.json")
+        info_file = Path(
+            path, f"{Path(self._img_filename).stem}_patch_info_coco.json"
+        )
         with open(info_file, "w") as file:
             json.dump(self._patch_info_coco, file, indent=2)
 
@@ -787,9 +806,13 @@ if __name__ == "__main__":
     patches_path = (
         args.base_path + "/OUTPUT_" + args.model_type + "/" + args.patches_dir
     )
-    bbox_path = args.base_path + "/OUTPUT_" + args.model_type + "/" + args.bbox_dir
+    bbox_path = (
+        args.base_path + "/OUTPUT_" + args.model_type + "/" + args.bbox_dir
+    )
     if not os.path.exists(image_path):
-        raise FileNotFoundError(f"Input directory '{image_path}' does not exist.")
+        raise FileNotFoundError(
+            f"Input directory '{image_path}' does not exist."
+        )
 
     os.makedirs(patches_path, exist_ok=True)
     os.makedirs(bbox_path, exist_ok=True)

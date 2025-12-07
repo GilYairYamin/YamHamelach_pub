@@ -3,20 +3,19 @@ import json
 import os
 import pickle
 from pathlib import Path
+
 # import tempfile
 # from typing import TupleP
-
 import cv2
-import matplotlib.pyplot as plt
 import matplotlib
-matplotlib.use('Agg')  # Set the backend to Agg before importing pyplot
+import matplotlib.pyplot as plt
 
-# import numpy as np
+matplotlib.use("Agg")  # Set the backend to Agg before importing pyplot
 import pandas as pd
-import streamlit as st
-from matplotlib.lines import Line2D
-from dotenv import load_dotenv
 import plotly.graph_objects as go
+import streamlit as st
+from dotenv import load_dotenv
+from matplotlib.lines import Line2D
 
 
 # Function to load an image and convert to RGB for display
@@ -182,7 +181,7 @@ def visualize_match(
     if debug:
         plt.show()
     else:
-        plt.close('all')  # Close any existing figures
+        plt.close("all")  # Close any existing figures
         st.pyplot(fig)
         plt.close(fig)  # Close the figure after displaying
 
@@ -191,27 +190,33 @@ def plot_image_with_rects(img, rects, title):
     fig = go.Figure()
     fig.add_trace(go.Image(z=img))
     for rect in rects:
-        x0, y0, x1, y1 = rect['coords']
+        x0, y0, x1, y1 = rect["coords"]
         fig.add_shape(
             type="rect",
-            x0=x0, y0=y0, x1=x1, y1=y1,
+            x0=x0,
+            y0=y0,
+            x1=x1,
+            y1=y1,
             line=dict(color="yellow", width=3),
             fillcolor="rgba(0,0,0,0)",
-            name=rect['label'],
-            opacity=0.5
+            name=rect["label"],
+            opacity=0.5,
         )
-        fig.add_trace(go.Scatter(
-            x=[x0], y=[y0],
-            text=[rect['label']],
-            mode="text",
-            showlegend=False
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=[x0],
+                y=[y0],
+                text=[rect["label"]],
+                mode="text",
+                showlegend=False,
+            )
+        )
     fig.update_layout(
         title=title,
         margin=dict(l=0, r=0, t=30, b=0),
         dragmode=False,
         xaxis=dict(showticklabels=False),
-        yaxis=dict(showticklabels=False, scaleanchor="x", scaleratio=1)
+        yaxis=dict(showticklabels=False, scaleanchor="x", scaleratio=1),
     )
     fig.update_yaxes(autorange="reversed")
     return fig
@@ -240,56 +245,67 @@ def plot_patch_keypoints(patch1, patch2, keypoints1, keypoints2, matches):
 def main():
     # Get the absolute path to the script's directory
     script_dir = Path(__file__).parent.absolute()
-    
+
     # Debug information about paths
     print("Current working directory:", os.getcwd())
     print("Script directory:", script_dir)
-    
+
     # Check for .env files in multiple locations
     possible_env_locations = [
-        script_dir / '.env',
-        Path.cwd() / '.env',
-        Path.home() / '.env'
+        script_dir / ".env",
+        Path.cwd() / ".env",
+        Path.home() / ".env",
     ]
-    
+
     print("\nChecking for .env files in:")
     for loc in possible_env_locations:
         print(f"- {loc}: {'EXISTS' if loc.exists() else 'NOT FOUND'}")
-    
+
     # Load .env file from the script's directory
-    env_path = script_dir / '.env'
+    env_path = script_dir / ".env"
     print("\nLoading .env from:", env_path)
-    
+
     # Print the contents of the .env file if it exists
     if env_path.exists():
         print("\nContents of .env file:")
-        with open(env_path, 'r') as f:
+        with open(env_path, "r") as f:
             print(f.read())
     else:
         print("\nWARNING: .env file not found at:", env_path)
-    
+
     # Load environment variables
     load_dotenv(dotenv_path=env_path, override=True)
-    
+
     # Debug print all relevant environment variables
     print("\nEnvironment variables after loading .env:")
-    for key in ["BASE_PATH", "IMAGES_IN", "PATCHES_IN", "SIFT_MATCHES_1000", 
-                "SIFT_MATCHES_W_TP", "SIFT_MATCHES_W_TP_W_HOMO", "PATCHES_CACHE"]:
+    for key in [
+        "BASE_PATH",
+        "IMAGES_IN",
+        "PATCHES_IN",
+        "SIFT_MATCHES_1000",
+        "SIFT_MATCHES_W_TP",
+        "SIFT_MATCHES_W_TP_W_HOMO",
+        "PATCHES_CACHE",
+    ]:
         print(f"{key}: {os.getenv(key)}")
-    
+
     DEBUG = os.getenv("DEBUG", "False").lower() in ["true", "1", "t"]
-    DEBUG_DISPLAY = os.getenv("DEBUG_DISPLAY", "False").lower() in ["true", "1", "t"]
+    DEBUG_DISPLAY = os.getenv("DEBUG_DISPLAY", "False").lower() in [
+        "true",
+        "1",
+        "t",
+    ]
     print("\nDEBUG: " + str(DEBUG))
     print("DEBUG_DISPLAY: " + str(DEBUG_DISPLAY))
-    
+
     base_path = os.getenv("BASE_PATH")
     if not base_path:
         raise ValueError("BASE_PATH environment variable is not set!")
     print("\nbase_path: " + base_path)
-    
+
     IMAGES_IN_path = os.path.join(base_path, os.getenv("IMAGES_IN"))
     PATCHES_IN = os.path.join(base_path, os.getenv("PATCHES_IN"))
-    
+
     sift_debug_file = os.path.join(base_path, os.getenv("SIFT_MATCHES_1000"))
     # A csv file with matches (patches matched)
     _sift_matches_w_tp = os.getenv("SIFT_MATCHES_W_TP")
@@ -300,10 +316,12 @@ def main():
     patches_key_dec_cache = os.path.join(base_path, os.getenv("PATCHES_CACHE"))
 
     # Define output filename * file with raw for each match
-    if (DEBUG == 1):
+    if DEBUG == 1:
         input_main_csv_file = os.path.join(base_path, sift_debug_file)
     else:
-        input_main_csv_file = os.path.join(base_path, csv_sift_matches_w_tp_w_homo)
+        input_main_csv_file = os.path.join(
+            base_path, csv_sift_matches_w_tp_w_homo
+        )
 
     if input_main_csv_file is not None:
         # Debug flag to visualize the first match automatically
@@ -358,57 +376,107 @@ def main():
             img1 = load_image(img1_path)
             img2 = load_image(img2_path)
 
-            patch1_info = get_patch_info(base_path, os.path.basename(file1).split("_")[0], os.path.basename(file1).split("_")[1].split(".")[0])
-            patch2_info = get_patch_info(base_path, os.path.basename(file2).split("_")[0], os.path.basename(file2).split("_")[1].split(".")[0])
+            patch1_info = get_patch_info(
+                base_path,
+                os.path.basename(file1).split("_")[0],
+                os.path.basename(file1).split("_")[1].split(".")[0],
+            )
+            patch2_info = get_patch_info(
+                base_path,
+                os.path.basename(file2).split("_")[0],
+                os.path.basename(file2).split("_")[1].split(".")[0],
+            )
 
             rects1 = []
             rects2 = []
             if patch1_info:
-                rects1.append({
-                    "coords": patch1_info["coordinates"],
-                    "label": os.path.basename(file1)
-                })
+                rects1.append(
+                    {
+                        "coords": patch1_info["coordinates"],
+                        "label": os.path.basename(file1),
+                    }
+                )
             if patch2_info:
-                rects2.append({
-                    "coords": patch2_info["coordinates"],
-                    "label": os.path.basename(file2)
-                })
+                rects2.append(
+                    {
+                        "coords": patch2_info["coordinates"],
+                        "label": os.path.basename(file2),
+                    }
+                )
 
             # Display images with rectangles
             col1, col2 = st.columns(2)
             with col1:
-                st.plotly_chart(plot_image_with_rects(img1, rects1, f"Original Image 1: {img1_name}"), use_container_width=True)
+                st.plotly_chart(
+                    plot_image_with_rects(
+                        img1, rects1, f"Original Image 1: {img1_name}"
+                    ),
+                    use_container_width=True,
+                )
             with col2:
-                st.plotly_chart(plot_image_with_rects(img2, rects2, f"Original Image 2: {img2_name}"), use_container_width=True)
+                st.plotly_chart(
+                    plot_image_with_rects(
+                        img2, rects2, f"Original Image 2: {img2_name}"
+                    ),
+                    use_container_width=True,
+                )
 
             # Hover logic
-            st.info("Hover over a rectangle in the image to see patch keypoints. (In Streamlit, click the rectangle label below to display the patch keypoints.)")
+            st.info(
+                "Hover over a rectangle in the image to see patch keypoints. (In Streamlit, click the rectangle label below to display the patch keypoints.)"
+            )
 
             # Simulate hover by letting user select which patch to view keypoints for
-            patch_to_show = st.radio("Show patch keypoints for:", [file1, file2])
+            patch_to_show = st.radio(
+                "Show patch keypoints for:", [file1, file2]
+            )
 
             if patch_to_show == file1 and patch1_info and patch2_info:
-                kp1_path = os.path.join(base_path, patches_key_dec_cache, file1) + ".pkl"
-                kp2_path = os.path.join(base_path, patches_key_dec_cache, file2) + ".pkl"
+                kp1_path = (
+                    os.path.join(base_path, patches_key_dec_cache, file1)
+                    + ".pkl"
+                )
+                kp2_path = (
+                    os.path.join(base_path, patches_key_dec_cache, file2)
+                    + ".pkl"
+                )
                 keypoints1 = load_keypoints(kp1_path)
                 keypoints2 = load_keypoints(kp2_path)
-                patch1_path = os.path.join(base_path, os.path.basename(file1).split("_")[0], file1)
-                patch2_path = os.path.join(base_path, os.path.basename(file2).split("_")[0], file2)
+                patch1_path = os.path.join(
+                    base_path, os.path.basename(file1).split("_")[0], file1
+                )
+                patch2_path = os.path.join(
+                    base_path, os.path.basename(file2).split("_")[0], file2
+                )
                 patch1 = load_image(patch1_path)
                 patch2 = load_image(patch2_path)
                 st.subheader("Patch Keypoints Visualization")
-                plot_patch_keypoints(patch1, patch2, keypoints1, keypoints2, row["matches"])
+                plot_patch_keypoints(
+                    patch1, patch2, keypoints1, keypoints2, row["matches"]
+                )
             elif patch_to_show == file2 and patch1_info and patch2_info:
-                kp1_path = os.path.join(base_path, patches_key_dec_cache, file1) + ".pkl"
-                kp2_path = os.path.join(base_path, patches_key_dec_cache, file2) + ".pkl"
+                kp1_path = (
+                    os.path.join(base_path, patches_key_dec_cache, file1)
+                    + ".pkl"
+                )
+                kp2_path = (
+                    os.path.join(base_path, patches_key_dec_cache, file2)
+                    + ".pkl"
+                )
                 keypoints1 = load_keypoints(kp1_path)
                 keypoints2 = load_keypoints(kp2_path)
-                patch1_path = os.path.join(base_path, os.path.basename(file1).split("_")[0], file1)
-                patch2_path = os.path.join(base_path, os.path.basename(file2).split("_")[0], file2)
+                patch1_path = os.path.join(
+                    base_path, os.path.basename(file1).split("_")[0], file1
+                )
+                patch2_path = os.path.join(
+                    base_path, os.path.basename(file2).split("_")[0], file2
+                )
                 patch1 = load_image(patch1_path)
                 patch2 = load_image(patch2_path)
                 st.subheader("Patch Keypoints Visualization")
-                plot_patch_keypoints(patch1, patch2, keypoints1, keypoints2, row["matches"])
+                plot_patch_keypoints(
+                    patch1, patch2, keypoints1, keypoints2, row["matches"]
+                )
             else:
                 st.warning("Patch info not found for one or both patches.")
 

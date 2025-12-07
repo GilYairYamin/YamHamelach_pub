@@ -3,9 +3,9 @@ Database Pruning Script for Fragment Matches
 Reduces database size by keeping only essential data
 """
 
-import sqlite3
-import pickle
 import os
+import pickle
+import sqlite3
 
 
 def prune_database(

@@ -10,19 +10,20 @@ pip install streamlit opencv-python numpy pandas plotly sqlite3 pillow
 Run with: streamlit run fragment_viewer.py
 """
 
-import streamlit as st
+import base64
+import os
+import pickle
+import sqlite3
+from io import BytesIO
+from typing import Dict, List, Optional, Tuple
+
 import cv2
 import numpy as np
 import pandas as pd
-import sqlite3
-import os
-import pickle
-from PIL import Image
-import plotly.graph_objects as go
 import plotly.express as px
-from typing import List, Tuple, Dict, Optional
-import base64
-from io import BytesIO
+import plotly.graph_objects as go
+import streamlit as st
+from PIL import Image
 
 # Page configuration
 st.set_page_config(

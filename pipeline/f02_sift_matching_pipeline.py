@@ -30,19 +30,20 @@ This pipeline is designed for scenarios where you have:
 - Require scalable processing that can resume after interruption
 """
 
-import sqlite3
-import numpy as np
-import cv2
+import mmap
 import os
 import pickle
-from typing import Dict, List, Tuple, Iterator, Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import threading
-from dataclasses import dataclass
-from contextlib import contextmanager
-import mmap
+import sqlite3
 import struct
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import Dict, Iterator, List, Optional, Tuple
+
+import cv2
+import numpy as np
 
 
 @dataclass
@@ -61,6 +62,7 @@ class MatchResult:
         matches_data contains pickled list of tuples: (queryIdx, trainIdx, distance)
         where queryIdx/trainIdx are keypoint indices and distance is match quality
     """
+
     file1: str
     file2: str
     match_count: int
@@ -116,10 +118,18 @@ class DatabaseManager:
         """
         with sqlite3.connect(self.db_path) as conn:
             # Apply SQLite performance optimizations
-            conn.execute("PRAGMA journal_mode=WAL")      # Write-Ahead Logging for concurrency
-            conn.execute("PRAGMA synchronous=NORMAL")    # Faster writes with good durability
-            conn.execute("PRAGMA cache_size=10000")      # 10MB cache (10000 * 1024 bytes)
-            conn.execute("PRAGMA temp_store=memory")     # Use memory for temporary tables
+            conn.execute(
+                "PRAGMA journal_mode=WAL"
+            )  # Write-Ahead Logging for concurrency
+            conn.execute(
+                "PRAGMA synchronous=NORMAL"
+            )  # Faster writes with good durability
+            conn.execute(
+                "PRAGMA cache_size=10000"
+            )  # 10MB cache (10000 * 1024 bytes)
+            conn.execute(
+                "PRAGMA temp_store=memory"
+            )  # Use memory for temporary tables
 
             # Create main matches table with comprehensive metadata
             conn.execute("""
@@ -135,11 +145,21 @@ class DatabaseManager:
             """)
 
             # Create optimized indexes for common query patterns
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_file1 ON matches(file1)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_file2 ON matches(file2)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_files ON matches(file1, file2)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_match_count ON matches(match_count DESC)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_validated ON matches(is_validated)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_file1 ON matches(file1)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_file2 ON matches(file2)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_files ON matches(file1, file2)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_match_count ON matches(match_count DESC)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_validated ON matches(is_validated)"
+            )
 
             # Create resume capability table - tracks which pairs have been processed
             conn.execute("""
@@ -153,7 +173,9 @@ class DatabaseManager:
             conn.commit()
             print(f"Database initialized at: {self.db_path}")
 
-    def batch_insert_matches(self, matches: List[MatchResult], batch_size: int = 1000):
+    def batch_insert_matches(
+        self, matches: List[MatchResult], batch_size: int = 1000
+    ):
         """
         Insert match results in batches for optimal database performance.
 
@@ -179,22 +201,34 @@ class DatabaseManager:
             try:
                 # Process matches in batches to optimize memory and I/O
                 for i in range(0, len(matches), batch_size):
-                    batch = matches[i:i + batch_size]
+                    batch = matches[i : i + batch_size]
 
                     # Insert match results
-                    conn.executemany("""
+                    conn.executemany(
+                        """
                         INSERT INTO matches (file1, file2, match_count, matches_data, is_validated)
                         VALUES (?, ?, ?, ?, ?)
-                    """, [
-                        (m.file1, m.file2, m.match_count, m.matches_data, m.is_validated)
-                        for m in batch
-                    ])
+                    """,
+                        [
+                            (
+                                m.file1,
+                                m.file2,
+                                m.match_count,
+                                m.matches_data,
+                                m.is_validated,
+                            )
+                            for m in batch
+                        ],
+                    )
 
                     # Track processed pairs for resume capability
-                    conn.executemany("""
+                    conn.executemany(
+                        """
                         INSERT OR IGNORE INTO processed_pairs (file1, file2)
                         VALUES (?, ?)
-                    """, [(m.file1, m.file2) for m in batch])
+                    """,
+                        [(m.file1, m.file2) for m in batch],
+                    )
 
                     total_inserted += len(batch)
 
@@ -227,8 +261,12 @@ class DatabaseManager:
             print(f"Found {len(processed_pairs)} previously processed pairs")
             return processed_pairs
 
-    def get_top_matches(self, limit: int = 1000, min_matches: int = 1, include_non_matches: bool = False) -> Iterator[
-        Tuple]:
+    def get_top_matches(
+        self,
+        limit: int = 1000,
+        min_matches: int = 1,
+        include_non_matches: bool = False,
+    ) -> Iterator[Tuple]:
         """
         Stream top matches without loading all results into memory.
 
@@ -247,22 +285,28 @@ class DatabaseManager:
             if include_non_matches:
                 # Include all entries, even -1 (non-matches)
                 # This is useful for understanding the full comparison space
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT file1, file2, match_count, matches_data, is_validated
                     FROM matches 
                     ORDER BY match_count DESC 
                     LIMIT ?
-                """, (limit,))
+                """,
+                    (limit,),
+                )
             else:
                 # Default behavior: exclude non-matches (-1 entries)
                 # Only return pairs with actual matches
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT file1, file2, match_count, matches_data, is_validated
                     FROM matches 
                     WHERE match_count >= ?
                     ORDER BY match_count DESC 
                     LIMIT ?
-                """, (min_matches, limit))
+                """,
+                    (min_matches, limit),
+                )
 
             for row in cursor:
                 yield row
@@ -283,11 +327,14 @@ class DatabaseManager:
         """
         with sqlite3.connect(self.db_path) as conn:
             # Update validation status for both orientations of each pair
-            conn.executemany("""
+            conn.executemany(
+                """
                 UPDATE matches 
                 SET is_validated = 1 
                 WHERE (file1 = ? AND file2 = ?) OR (file1 = ? AND file2 = ?)
-            """, [(f1, f2, f2, f1) for f1, f2 in file_pairs])
+            """,
+                [(f1, f2, f2, f1) for f1, f2 in file_pairs],
+            )
 
             conn.commit()
             print(f"Updated validation status for {len(file_pairs)} pairs")
@@ -317,15 +364,18 @@ class DatabaseManager:
             result = cursor.fetchone()
 
             return {
-                'total_comparisons': result[0] or 0,
-                'successful_matches': result[1] or 0,
-                'non_matches': result[2] or 0,
-                'validated_matches': result[3] or 0,
-                'avg_match_count': result[4] or 0.0,
-                'max_match_count': result[5] or 0,
+                "total_comparisons": result[0] or 0,
+                "successful_matches": result[1] or 0,
+                "non_matches": result[2] or 0,
+                "validated_matches": result[3] or 0,
+                "avg_match_count": result[4] or 0.0,
+                "max_match_count": result[5] or 0,
                 # Calculate the success rate
-                'match_success_rate': (result[1] / result[0] * 100) if result[0] > 0 else 0
+                "match_success_rate": (result[1] / result[0] * 100)
+                if result[0] > 0
+                else 0,
             }
+
 
 class MemoryMappedFeatureCache:
     """
@@ -366,7 +416,9 @@ class MemoryMappedFeatureCache:
         """Generate cache file path for an image."""
         return os.path.join(self.cache_dir, f"{image_key}.bin")
 
-    def _serialize_descriptors(self, keypoints: List[cv2.KeyPoint], descriptors: np.ndarray) -> bytes:
+    def _serialize_descriptors(
+        self, keypoints: List[cv2.KeyPoint], descriptors: np.ndarray
+    ) -> bytes:
         """
         Serialize keypoints and descriptors to optimized binary format.
 
@@ -385,25 +437,43 @@ class MemoryMappedFeatureCache:
             bytes: Serialized binary data
         """
         if descriptors is None or len(keypoints) == 0:
-            return b''
+            return b""
 
         # Convert keypoints to structured numpy array for efficient storage
-        kp_array = np.array([
-            (kp.pt[0], kp.pt[1], kp.size, kp.angle, kp.response, kp.octave, kp.class_id)
-            for kp in keypoints
-        ], dtype=[
-            ('x', 'f4'), ('y', 'f4'), ('size', 'f4'), ('angle', 'f4'),
-            ('response', 'f4'), ('octave', 'i4'), ('class_id', 'i4')
-        ])
+        kp_array = np.array(
+            [
+                (
+                    kp.pt[0],
+                    kp.pt[1],
+                    kp.size,
+                    kp.angle,
+                    kp.response,
+                    kp.octave,
+                    kp.class_id,
+                )
+                for kp in keypoints
+            ],
+            dtype=[
+                ("x", "f4"),
+                ("y", "f4"),
+                ("size", "f4"),
+                ("angle", "f4"),
+                ("response", "f4"),
+                ("octave", "i4"),
+                ("class_id", "i4"),
+            ],
+        )
 
         # Pack data with header for format validation
-        header = struct.pack('II', len(keypoints), descriptors.shape[1])
+        header = struct.pack("II", len(keypoints), descriptors.shape[1])
         kp_bytes = kp_array.tobytes()
         desc_bytes = descriptors.astype(np.float32).tobytes()
 
         return header + kp_bytes + desc_bytes
 
-    def _deserialize_descriptors(self, data: bytes) -> Tuple[List[cv2.KeyPoint], np.ndarray]:
+    def _deserialize_descriptors(
+        self, data: bytes
+    ) -> Tuple[List[cv2.KeyPoint], np.ndarray]:
         """
         Deserialize binary data back to keypoints and descriptors.
 
@@ -420,33 +490,52 @@ class MemoryMappedFeatureCache:
             return [], None
 
         # Unpack header to get dimensions
-        n_kp, desc_dim = struct.unpack('II', data[:8])
+        n_kp, desc_dim = struct.unpack("II", data[:8])
         offset = 8
 
         # Unpack keypoints from structured array
-        kp_dtype = np.dtype([
-            ('x', 'f4'), ('y', 'f4'), ('size', 'f4'), ('angle', 'f4'),
-            ('response', 'f4'), ('octave', 'i4'), ('class_id', 'i4')
-        ])
+        kp_dtype = np.dtype(
+            [
+                ("x", "f4"),
+                ("y", "f4"),
+                ("size", "f4"),
+                ("angle", "f4"),
+                ("response", "f4"),
+                ("octave", "i4"),
+                ("class_id", "i4"),
+            ]
+        )
         kp_size = kp_dtype.itemsize * n_kp
-        kp_array = np.frombuffer(data[offset:offset + kp_size], dtype=kp_dtype)
+        kp_array = np.frombuffer(
+            data[offset : offset + kp_size], dtype=kp_dtype
+        )
         offset += kp_size
 
         # Convert back to OpenCV KeyPoint objects
         keypoints = [
-            cv2.KeyPoint(x=float(kp['x']), y=float(kp['y']), size=float(kp['size']),
-                         angle=float(kp['angle']), response=float(kp['response']),
-                         octave=int(kp['octave']), class_id=int(kp['class_id']))
+            cv2.KeyPoint(
+                x=float(kp["x"]),
+                y=float(kp["y"]),
+                size=float(kp["size"]),
+                angle=float(kp["angle"]),
+                response=float(kp["response"]),
+                octave=int(kp["octave"]),
+                class_id=int(kp["class_id"]),
+            )
             for kp in kp_array
         ]
 
         # Unpack descriptors
         desc_data = data[offset:]
-        descriptors = np.frombuffer(desc_data, dtype=np.float32).reshape(n_kp, desc_dim)
+        descriptors = np.frombuffer(desc_data, dtype=np.float32).reshape(
+            n_kp, desc_dim
+        )
 
         return keypoints, descriptors
 
-    def get_features(self, image_path: str) -> Tuple[List[cv2.KeyPoint], np.ndarray]:
+    def get_features(
+        self, image_path: str
+    ) -> Tuple[List[cv2.KeyPoint], np.ndarray]:
         """
         Get or compute SIFT features for an image with automatic caching.
 
@@ -480,7 +569,7 @@ class MemoryMappedFeatureCache:
         # Try disk cache (fast path)
         if os.path.exists(cache_path):
             try:
-                with open(cache_path, 'rb') as f:
+                with open(cache_path, "rb") as f:
                     data = f.read()
                 result = self._deserialize_descriptors(data)
 
@@ -508,7 +597,7 @@ class MemoryMappedFeatureCache:
         # Save to disk cache for future use
         try:
             data = self._serialize_descriptors(keypoints, descriptors)
-            with open(cache_path, 'wb') as f:
+            with open(cache_path, "wb") as f:
                 f.write(data)
         except Exception as e:
             print(f"Error caching features for {image_key}: {e}")
@@ -545,7 +634,13 @@ class ParallelFragmentMatcher:
     - Database provides persistent state for very long runs
     """
 
-    def __init__(self, image_base_path: str, cache_dir: str, db_path: str, num_workers: int = 4):
+    def __init__(
+        self,
+        image_base_path: str,
+        cache_dir: str,
+        db_path: str,
+        num_workers: int = 4,
+    ):
         """
         Initialize parallel matcher with optimized components.
 
@@ -581,7 +676,7 @@ class ParallelFragmentMatcher:
         Note: Could be extended to support TIFF, BMP, etc.
         """
         image_files = []
-        supported_extensions = ('.jpg', '.jpeg', '.png')
+        supported_extensions = (".jpg", ".jpeg", ".png")
 
         for root, _, files in os.walk(self.image_base_path):
             for file in files:
@@ -591,7 +686,9 @@ class ParallelFragmentMatcher:
         print(f"Found {len(image_files)} image files")
         return image_files
 
-    def _calculate_matches(self, file1: str, file2: str) -> Optional[MatchResult]:
+    def _calculate_matches(
+        self, file1: str, file2: str
+    ) -> Optional[MatchResult]:
         """
         Calculate SIFT matches between two images with quality filtering.
 
@@ -618,7 +715,12 @@ class ParallelFragmentMatcher:
 
             # Skip only if features cannot be extracted at all
             # (this means the images themselves are problematic)
-            if des1 is None or des2 is None or len(des1) == 0 or len(des2) == 0:
+            if (
+                des1 is None
+                or des2 is None
+                or len(des1) == 0
+                or len(des2) == 0
+            ):
                 # We still return None here because these images literally
                 # cannot be processed - they might be corrupted or blank
                 return None
@@ -634,7 +736,9 @@ class ParallelFragmentMatcher:
                     m, n = match_pair
                     # Classic 0.75 threshold from Lowe's paper
                     if m.distance < 0.75 * n.distance:
-                        good_matches.append((m.queryIdx, m.trainIdx, m.distance))
+                        good_matches.append(
+                            (m.queryIdx, m.trainIdx, m.distance)
+                        )
 
             # HERE'S THE KEY CHANGE: Instead of returning None when no good matches,
             # we return a MatchResult with count = -1
@@ -645,8 +749,8 @@ class ParallelFragmentMatcher:
                     file1=os.path.basename(file1),
                     file2=os.path.basename(file2),
                     match_count=-1,  # Sentinel value indicating no matches found
-                    matches_data=b'',  # Empty data since no matches to store
-                    is_validated=False
+                    matches_data=b"",  # Empty data since no matches to store
+                    is_validated=False,
                 )
 
             # For successful matches, proceed as before
@@ -656,13 +760,18 @@ class ParallelFragmentMatcher:
                 file1=os.path.basename(file1),
                 file2=os.path.basename(file2),
                 match_count=len(good_matches),
-                matches_data=matches_data
+                matches_data=matches_data,
             )
 
         except Exception as e:
-            print(f"Error processing {os.path.basename(file1)} vs {os.path.basename(file2)}: {e}")
+            print(
+                f"Error processing {os.path.basename(file1)} vs {os.path.basename(file2)}: {e}"
+            )
             return None
-    def _process_batch(self, image_pairs: List[Tuple[str, str]]) -> List[MatchResult]:
+
+    def _process_batch(
+        self, image_pairs: List[Tuple[str, str]]
+    ) -> List[MatchResult]:
         """
         Process a batch of image pairs in a single worker thread.
 
@@ -730,8 +839,12 @@ class ParallelFragmentMatcher:
 
         print(f"\n📁 Folder Distribution Analysis:")
         print(f"  Number of folders: {len(folder_distribution)}")
-        print(f"  Average images per folder: {len(image_files) / len(folder_distribution):.1f}")
-        print(f"  Theoretical same-folder pairs: {theoretical_same_folder_pairs:,}")
+        print(
+            f"  Average images per folder: {len(image_files) / len(folder_distribution):.1f}"
+        )
+        print(
+            f"  Theoretical same-folder pairs: {theoretical_same_folder_pairs:,}"
+        )
 
         # Generate pairs to process with detailed tracking
         for i in range(len(image_files)):
@@ -745,8 +858,14 @@ class ParallelFragmentMatcher:
                     continue
 
                 # Check if already processed (resume capability)
-                basename1, basename2 = os.path.basename(file1), os.path.basename(file2)
-                if (basename1, basename2) in processed_pairs or (basename2, basename1) in processed_pairs:
+                basename1, basename2 = (
+                    os.path.basename(file1),
+                    os.path.basename(file2),
+                )
+                if (basename1, basename2) in processed_pairs or (
+                    basename2,
+                    basename1,
+                ) in processed_pairs:
                     already_processed_skipped += 1
                     continue
 
@@ -758,12 +877,18 @@ class ParallelFragmentMatcher:
 
         print(f"\n🔍 Filtering Statistics:")
         print(f"  Total theoretical pairs: {total_theoretical_pairs:,}")
-        print(f"  ├─ Same-folder pairs skipped: {same_folder_skipped:,} "
-              f"({same_folder_skipped / total_theoretical_pairs * 100:.1f}%)")
-        print(f"  ├─ Already processed pairs skipped: {already_processed_skipped:,} "
-              f"({already_processed_skipped / total_theoretical_pairs * 100:.1f}%)")
-        print(f"  └─ Pairs to process now: {total_pairs:,} "
-              f"({total_pairs / total_theoretical_pairs * 100:.1f}%)")
+        print(
+            f"  ├─ Same-folder pairs skipped: {same_folder_skipped:,} "
+            f"({same_folder_skipped / total_theoretical_pairs * 100:.1f}%)"
+        )
+        print(
+            f"  ├─ Already processed pairs skipped: {already_processed_skipped:,} "
+            f"({already_processed_skipped / total_theoretical_pairs * 100:.1f}%)"
+        )
+        print(
+            f"  └─ Pairs to process now: {total_pairs:,} "
+            f"({total_pairs / total_theoretical_pairs * 100:.1f}%)"
+        )
 
         # Calculate time and resource savings
         estimated_time_per_pair = 0.05  # Approximate seconds per pair (adjust based on your hardware)
@@ -773,19 +898,31 @@ class ParallelFragmentMatcher:
         print(f"\n⏱️  Estimated Time Savings from Same-Folder Filter:")
         print(f"  Comparisons avoided: {same_folder_skipped:,}")
         print(f"  Estimated time saved: {time_saved_hours:.1f} hours")
-        print(f"  Efficiency gain: {(same_folder_skipped / total_theoretical_pairs * 100):.1f}% reduction in work")
+        print(
+            f"  Efficiency gain: {(same_folder_skipped / total_theoretical_pairs * 100):.1f}% reduction in work"
+        )
 
         # Show folder pair statistics for deeper insight
         if len(folder_distribution) > 1:
             print(f"\n📊 Cross-Folder Comparison Statistics:")
-            different_folder_pairs = total_theoretical_pairs - theoretical_same_folder_pairs
-            print(f"  Cross-folder pairs (potential matches): {different_folder_pairs:,}")
-            print(f"  Same-folder pairs (filtered out): {theoretical_same_folder_pairs:,}")
-            print(f"  Ratio: {different_folder_pairs / theoretical_same_folder_pairs:.2f}:1 "
-                  f"(processing {different_folder_pairs / total_theoretical_pairs * 100:.1f}% of total)")
+            different_folder_pairs = (
+                total_theoretical_pairs - theoretical_same_folder_pairs
+            )
+            print(
+                f"  Cross-folder pairs (potential matches): {different_folder_pairs:,}"
+            )
+            print(
+                f"  Same-folder pairs (filtered out): {theoretical_same_folder_pairs:,}"
+            )
+            print(
+                f"  Ratio: {different_folder_pairs / theoretical_same_folder_pairs:.2f}:1 "
+                f"(processing {different_folder_pairs / total_theoretical_pairs * 100:.1f}% of total)"
+            )
 
         if total_pairs == 0:
-            print("\n✅ No new pairs to process! All pairs have been processed.")
+            print(
+                "\n✅ No new pairs to process! All pairs have been processed."
+            )
             return
 
         print(f"\n🚀 Starting processing of {total_pairs:,} new pairs...")
@@ -797,17 +934,23 @@ class ParallelFragmentMatcher:
             # Submit batches to worker pool
             futures = []
             for i in range(0, total_pairs, batch_size):
-                batch = pairs_to_process[i:i + batch_size]
+                batch = pairs_to_process[i : i + batch_size]
                 future = executor.submit(self._process_batch, batch)
                 futures.append(future)
 
-            print(f"Submitted {len(futures)} batches to {self.num_workers} workers")
+            print(
+                f"Submitted {len(futures)} batches to {self.num_workers} workers"
+            )
 
             # Collect results and save to database
             all_results = []
             processed_count = 0
 
-            for future in tqdm(as_completed(futures), total=len(futures), desc="Processing batches"):
+            for future in tqdm(
+                as_completed(futures),
+                total=len(futures),
+                desc="Processing batches",
+            ):
                 batch_results = future.result()
                 processed_count += batch_size
 
@@ -828,17 +971,24 @@ class ParallelFragmentMatcher:
         stats = self.db.get_statistics()
 
         print(f"\n✅ Matching completed in {elapsed_time:.1f} seconds")
-        print(f"Processing rate: {total_pairs / elapsed_time:.1f} pairs/second")
+        print(
+            f"Processing rate: {total_pairs / elapsed_time:.1f} pairs/second"
+        )
 
         # Calculate what the time would have been WITHOUT the same-folder filter
-        theoretical_time_without_filter = elapsed_time * (total_pairs + same_folder_skipped) / total_pairs
+        theoretical_time_without_filter = (
+            elapsed_time * (total_pairs + same_folder_skipped) / total_pairs
+        )
         actual_time_saved = theoretical_time_without_filter - elapsed_time
 
         print(f"\n💡 Performance Impact of Same-Folder Filter:")
-        print(f"  Time without filter (estimated): {theoretical_time_without_filter:.1f} seconds")
+        print(
+            f"  Time without filter (estimated): {theoretical_time_without_filter:.1f} seconds"
+        )
         print(f"  Actual time with filter: {elapsed_time:.1f} seconds")
         print(
-            f"  Time saved: {actual_time_saved:.1f} seconds ({actual_time_saved / theoretical_time_without_filter * 100:.1f}%)")
+            f"  Time saved: {actual_time_saved:.1f} seconds ({actual_time_saved / theoretical_time_without_filter * 100:.1f}%)"
+        )
 
         print(f"\n📈 Database statistics: {stats}")
 
@@ -873,13 +1023,19 @@ class ParallelFragmentMatcher:
             pam_df = pd.read_csv(pam_data_path)
             original_count = len(pam_df)
             pam_df = pam_df.dropna(subset=["Box"])  # Remove invalid entries
-            print(f"PAM data: {original_count} total entries, {len(pam_df)} valid entries")
+            print(
+                f"PAM data: {original_count} total entries, {len(pam_df)} valid entries"
+            )
 
             # Find fragment pairs: same Scroll+Frg, different Box = true positive
-            merged_df = pd.merge(pam_df, pam_df, on=["Scroll", "Frg"], suffixes=('_x', '_y'))
+            merged_df = pd.merge(
+                pam_df, pam_df, on=["Scroll", "Frg"], suffixes=("_x", "_y")
+            )
             filtered_df = merged_df[merged_df["Box_x"] != merged_df["Box_y"]]
 
-            print(f"Found {len(filtered_df)} potential true positive pairs from PAM data")
+            print(
+                f"Found {len(filtered_df)} potential true positive pairs from PAM data"
+            )
 
             # Generate image pairs for validation
             validation_pairs = []
@@ -898,7 +1054,11 @@ class ParallelFragmentMatcher:
 
             # Report validation statistics
             stats = self.db.get_statistics()
-            validation_rate = (stats['validated_matches'] / stats['total_matches'] * 100) if stats['total_matches'] > 0 else 0
+            validation_rate = (
+                (stats["validated_matches"] / stats["total_matches"] * 100)
+                if stats["total_matches"] > 0
+                else 0
+            )
 
             print(f"Validation completed:")
             print(f"  Total matches: {stats['total_matches']:,}")
@@ -936,17 +1096,23 @@ class ParallelFragmentMatcher:
         print(f"Exporting top {limit} matches to: {output_path}")
 
         try:
-            with open(output_path, 'w', newline='', encoding='utf-8') as csvfile:
+            with open(
+                output_path, "w", newline="", encoding="utf-8"
+            ) as csvfile:
                 writer = csv.writer(csvfile)
 
                 # Write header
-                writer.writerow(['file1', 'file2', 'match_count', 'is_validated'])
+                writer.writerow(
+                    ["file1", "file2", "match_count", "is_validated"]
+                )
 
                 # Stream results to avoid memory issues
                 exported_count = 0
                 for row in self.db.get_top_matches(limit=limit):
                     file1, file2, match_count, matches_data, is_validated = row
-                    writer.writerow([file1, file2, match_count, bool(is_validated)])
+                    writer.writerow(
+                        [file1, file2, match_count, bool(is_validated)]
+                    )
                     exported_count += 1
 
             print(f"Successfully exported {exported_count} matches")
@@ -954,7 +1120,9 @@ class ParallelFragmentMatcher:
             # Provide basic statistics about exported data
             if exported_count > 0:
                 stats = self.db.get_statistics()
-                print(f"Export represents {(exported_count / stats['total_matches'] * 100):.1f}% of total matches")
+                print(
+                    f"Export represents {(exported_count / stats['total_matches'] * 100):.1f}% of total matches"
+                )
 
         except Exception as e:
             print(f"Error exporting matches: {e}")
@@ -963,6 +1131,7 @@ class ParallelFragmentMatcher:
 
 # Environment configuration and deployment utilities
 import os
+
 from dotenv import load_dotenv
 
 
@@ -1004,31 +1173,46 @@ def load_env_config():
     load_dotenv()
 
     # Validate required configuration
-    base_path = os.getenv('BASE_PATH')
+    base_path = os.getenv("BASE_PATH")
     if not base_path:
         raise ValueError("BASE_PATH not found in .env file")
 
-    model_type = os.getenv('MODEL_TYPE', 'default')
+    model_type = os.getenv("MODEL_TYPE", "default")
 
     # Build complete configuration with defaults
     config = {
-        'base_path': base_path,
-        'model_type': model_type,
-
+        "base_path": base_path,
+        "model_type": model_type,
         # Derived paths (all under BASE_PATH/OUTPUT_MODEL_TYPE/)
-        'image_base_path': os.path.join(base_path, f"OUTPUT_{model_type}", os.getenv('PATCHES_DIR', 'patches')),
-        'cache_dir': os.path.join(base_path, f"OUTPUT_{model_type}", os.getenv('PATCHES_CACHE', 'cache')),
-        'db_path': os.path.join(base_path, f"OUTPUT_{model_type}", os.getenv('DB_NAME', 'matches.db')),
-        'pam_data_path': os.path.join(base_path, f"OUTPUT_{model_type}", os.getenv('PAM_CSV', 'pam.csv')),
-        'output_csv_path': os.path.join(base_path, f"OUTPUT_{model_type}", os.getenv('OUTPUT_CSV', 'top_matches.csv')),
-
+        "image_base_path": os.path.join(
+            base_path,
+            f"OUTPUT_{model_type}",
+            os.getenv("PATCHES_DIR", "patches"),
+        ),
+        "cache_dir": os.path.join(
+            base_path,
+            f"OUTPUT_{model_type}",
+            os.getenv("PATCHES_CACHE", "cache"),
+        ),
+        "db_path": os.path.join(
+            base_path,
+            f"OUTPUT_{model_type}",
+            os.getenv("DB_NAME", "matches.db"),
+        ),
+        "pam_data_path": os.path.join(
+            base_path, f"OUTPUT_{model_type}", os.getenv("PAM_CSV", "pam.csv")
+        ),
+        "output_csv_path": os.path.join(
+            base_path,
+            f"OUTPUT_{model_type}",
+            os.getenv("OUTPUT_CSV", "top_matches.csv"),
+        ),
         # Processing parameters
-        'num_workers': int(os.getenv('NUM_WORKERS', '8')),
-        'batch_size': int(os.getenv('BATCH_SIZE', '200')),
-        'export_limit': int(os.getenv('EXPORT_LIMIT', '10000')),
-
+        "num_workers": int(os.getenv("NUM_WORKERS", "8")),
+        "batch_size": int(os.getenv("BATCH_SIZE", "200")),
+        "export_limit": int(os.getenv("EXPORT_LIMIT", "10000")),
         # Debugging and monitoring
-        'debug': os.getenv('DEBUG', 'false').lower() == 'true'
+        "debug": os.getenv("DEBUG", "false").lower() == "true",
     }
 
     return config
@@ -1085,13 +1269,13 @@ class OptimizedFragmentMatchingPipeline:
 
         # Initialize the core matcher with optimized components
         self.matcher = ParallelFragmentMatcher(
-            image_base_path=self.config['image_base_path'],
-            cache_dir=self.config['cache_dir'],
-            db_path=self.config['db_path'],
-            num_workers=self.config['num_workers']
+            image_base_path=self.config["image_base_path"],
+            cache_dir=self.config["cache_dir"],
+            db_path=self.config["db_path"],
+            num_workers=self.config["num_workers"],
         )
 
-        if self.config['debug']:
+        if self.config["debug"]:
             print("Pipeline initialized with configuration:")
             for key, value in self.config.items():
                 print(f"  {key}: {value}")
@@ -1104,9 +1288,9 @@ class OptimizedFragmentMatchingPipeline:
         and fails early if there are permission issues.
         """
         directories_to_create = [
-            os.path.dirname(self.config['cache_dir']),
-            os.path.dirname(self.config['db_path']),
-            os.path.dirname(self.config['output_csv_path'])
+            os.path.dirname(self.config["cache_dir"]),
+            os.path.dirname(self.config["db_path"]),
+            os.path.dirname(self.config["output_csv_path"]),
         ]
 
         for directory in directories_to_create:
@@ -1147,7 +1331,9 @@ class OptimizedFragmentMatchingPipeline:
 
         try:
             # Execute parallel matching with configured parameters
-            self.matcher.run_parallel_matching(batch_size=self.config['batch_size'])
+            self.matcher.run_parallel_matching(
+                batch_size=self.config["batch_size"]
+            )
 
             elapsed_time = time.time() - start_time
 
@@ -1157,12 +1343,14 @@ class OptimizedFragmentMatchingPipeline:
             print(f"Total time: {elapsed_time:.1f} seconds")
             print(f"Results:")
             print(f"  Total matches found: {stats['total_matches']:,}")
-            print(f"  Average matches per pair: {stats['avg_match_count']:.1f}")
+            print(
+                f"  Average matches per pair: {stats['avg_match_count']:.1f}"
+            )
             print(f"  Best match count: {stats['max_match_count']}")
 
             # Calculate processing rates for performance monitoring
-            if stats['total_matches'] > 0:
-                rate = stats['total_matches'] / elapsed_time
+            if stats["total_matches"] > 0:
+                rate = stats["total_matches"] / elapsed_time
                 print(f"  Processing rate: {rate:.1f} matches/second")
 
         except Exception as e:
@@ -1199,8 +1387,10 @@ class OptimizedFragmentMatchingPipeline:
         print(f"PAM data source: {self.config['pam_data_path']}")
 
         # Check if ground truth data exists
-        if not os.path.exists(self.config['pam_data_path']):
-            print(f"WARNING: PAM file not found at {self.config['pam_data_path']}")
+        if not os.path.exists(self.config["pam_data_path"]):
+            print(
+                f"WARNING: PAM file not found at {self.config['pam_data_path']}"
+            )
             print("Skipping validation stage...")
             print("To enable validation, ensure PAM CSV file is available")
             return
@@ -1209,13 +1399,17 @@ class OptimizedFragmentMatchingPipeline:
 
         try:
             # Execute validation against ground truth
-            self.matcher.validate_with_pam(self.config['pam_data_path'])
+            self.matcher.validate_with_pam(self.config["pam_data_path"])
 
             elapsed_time = time.time() - start_time
 
             # Display validation results
             stats = self.matcher.db.get_statistics()
-            validation_rate = (stats['validated_matches'] / stats['total_matches'] * 100) if stats['total_matches'] > 0 else 0
+            validation_rate = (
+                (stats["validated_matches"] / stats["total_matches"] * 100)
+                if stats["total_matches"] > 0
+                else 0
+            )
 
             print(f"\nVALIDATION COMPLETED")
             print(f"Validation time: {elapsed_time:.1f} seconds")
@@ -1228,9 +1422,13 @@ class OptimizedFragmentMatchingPipeline:
             if validation_rate > 0:
                 print(f"\nAlgorithm Performance Indicators:")
                 if validation_rate > 80:
-                    print(f"  Excellent precision - algorithm is highly accurate")
+                    print(
+                        f"  Excellent precision - algorithm is highly accurate"
+                    )
                 elif validation_rate > 60:
-                    print(f"  Good precision - algorithm shows strong performance")
+                    print(
+                        f"  Good precision - algorithm shows strong performance"
+                    )
                 elif validation_rate > 40:
                     print(f"  Moderate precision - consider parameter tuning")
                 else:
@@ -1273,8 +1471,8 @@ class OptimizedFragmentMatchingPipeline:
         try:
             # Export top matches with configured limit
             self.matcher.export_top_matches(
-                self.config['output_csv_path'],
-                limit=self.config['export_limit']
+                self.config["output_csv_path"],
+                limit=self.config["export_limit"],
             )
 
             elapsed_time = time.time() - start_time
@@ -1283,8 +1481,8 @@ class OptimizedFragmentMatchingPipeline:
             print(f"Export time: {elapsed_time:.1f} seconds")
 
             # Provide file information
-            if os.path.exists(self.config['output_csv_path']):
-                file_size = os.path.getsize(self.config['output_csv_path'])
+            if os.path.exists(self.config["output_csv_path"]):
+                file_size = os.path.getsize(self.config["output_csv_path"])
                 print(f"Output file size: {file_size / 1024:.1f} KB")
                 print(f"Ready for analysis in Excel, R, Python, etc.")
 
@@ -1325,7 +1523,9 @@ class OptimizedFragmentMatchingPipeline:
         print("=" * 60)
         print(f"Base path: {self.config['base_path']}")
         print(f"Model type: {self.config['model_type']}")
-        print(f"Configuration: {self.config['num_workers']} workers, batch size {self.config['batch_size']}")
+        print(
+            f"Configuration: {self.config['num_workers']} workers, batch size {self.config['batch_size']}"
+        )
         print("=" * 60)
 
         try:
@@ -1385,12 +1585,12 @@ class OptimizedFragmentMatchingPipeline:
         print(f"Database file: {self.config['db_path']}")
 
         # Check if database exists
-        if not os.path.exists(self.config['db_path']):
+        if not os.path.exists(self.config["db_path"]):
             print("Database not found - pipeline has not been run yet")
             return
 
         # Display file size information
-        file_size = os.path.getsize(self.config['db_path'])
+        file_size = os.path.getsize(self.config["db_path"])
         size_mb = file_size / (1024 * 1024)
         print(f"Database size: {size_mb:.2f} MB")
 
@@ -1404,9 +1604,11 @@ class OptimizedFragmentMatchingPipeline:
         print(f"  Maximum match count: {stats['max_match_count']}")
 
         # Calculate derived metrics
-        if stats['total_matches'] > 0:
-            validation_rate = (stats['validated_matches'] / stats['total_matches']) * 100
-            storage_per_match = file_size / stats['total_matches']
+        if stats["total_matches"] > 0:
+            validation_rate = (
+                stats["validated_matches"] / stats["total_matches"]
+            ) * 100
+            storage_per_match = file_size / stats["total_matches"]
 
             print(f"\nDerived Metrics:")
             print(f"  Validation rate: {validation_rate:.2f}%")
@@ -1473,19 +1675,19 @@ Examples:
   python pipeline.py --stage info      # Display database information
   python pipeline.py --config custom.env  # Use custom configuration
         """,
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     parser.add_argument(
         "--stage",
         choices=["matching", "validation", "export", "complete", "info"],
         default="complete",
-        help="Pipeline stage to execute (default: complete)"
+        help="Pipeline stage to execute (default: complete)",
     )
 
     parser.add_argument(
         "--config",
-        help="Path to .env configuration file (default: .env in current directory)"
+        help="Path to .env configuration file (default: .env in current directory)",
     )
 
     args = parser.parse_args()
@@ -1516,7 +1718,9 @@ Examples:
         print("❌ CONFIGURATION ERROR")
         print("=" * 60)
         print(f"Error: {e}")
-        print("\nPlease ensure your .env file contains all required variables:")
+        print(
+            "\nPlease ensure your .env file contains all required variables:"
+        )
         print()
         print("Required:")
         print("  BASE_PATH=/your/base/path")

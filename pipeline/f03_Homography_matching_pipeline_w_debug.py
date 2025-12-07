@@ -41,37 +41,41 @@ import csv
 import math
 import os
 import pickle
+import platform
 import sqlite3
 import sys
-from typing import List, Tuple, Dict, Optional, Iterator, Set
-from dataclasses import dataclass
-from contextlib import contextmanager
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import threading
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-import platform
-import psutil  # ### PHASE 2: Added for memory monitoring ###
+from typing import Dict, Iterator, List, Optional, Set, Tuple
 
 import cv2
 import numpy as np
+import psutil  # ### PHASE 2: Added for memory monitoring ###
 from dotenv import load_dotenv
 from tqdm import tqdm
 
 ### PHASE 1 OPTIMIZATION: Add Numba import ###
 try:
-    from numba import jit, njit, prange
     import numba
+    from numba import jit, njit, prange
+
     NUMBA_AVAILABLE = True
     print("✓ Numba JIT compiler available for acceleration")
 except ImportError:
     NUMBA_AVAILABLE = False
     print("⚠️ Numba not installed. Install with: pip install numba")
+
     # Create dummy decorator
     def jit(*args, **kwargs):
         def decorator(func):
             return func
+
         return decorator
+
     njit = jit
     prange = range
 
@@ -80,7 +84,8 @@ MPS_AVAILABLE = False
 MPS_DEVICE = None
 try:
     import torch
-    if platform.system() == 'Darwin' and platform.processor() == 'arm':
+
+    if platform.system() == "Darwin" and platform.processor() == "arm":
         if torch.backends.mps.is_available() and torch.backends.mps.is_built():
             MPS_AVAILABLE = True
             MPS_DEVICE = torch.device("mps")
@@ -98,6 +103,7 @@ except Exception as e:
 @dataclass
 class HomographyResult:
     """Data class for storing homography computation results."""
+
     match_id: int
     sum_homo_err: float
     len_homo_err: int
@@ -112,9 +118,7 @@ class HomographyResult:
 
 ### PHASE 2 OPTIMIZATION: MPS-accelerated projection error computation ###
 def compute_projection_errors_mps(
-    H: np.ndarray,
-    pts_a: np.ndarray,
-    pts_b: np.ndarray
+    H: np.ndarray, pts_a: np.ndarray, pts_b: np.ndarray
 ) -> np.ndarray:
     """
     MPS-accelerated projection error computation for Apple Silicon.
@@ -142,7 +146,7 @@ def compute_projection_errors_mps(
         z_coords = torch.where(
             torch.abs(z_coords) < 1e-8,
             torch.ones_like(z_coords) * 1e-8,
-            z_coords
+            z_coords,
         )
         projected_normalized = projected[:, :2] / z_coords
 
@@ -153,7 +157,7 @@ def compute_projection_errors_mps(
         errors = torch.where(
             torch.isfinite(errors),
             errors,
-            torch.tensor(float('inf'), device=MPS_DEVICE)
+            torch.tensor(float("inf"), device=MPS_DEVICE),
         )
 
         # Move back to CPU and convert to numpy
@@ -168,9 +172,7 @@ def compute_projection_errors_mps(
 ### PHASE 1 OPTIMIZATION: Numba-accelerated error computation ###
 @njit(parallel=True, cache=True, fastmath=True)
 def compute_projection_errors_vectorized_numba(
-    H: np.ndarray,
-    pts_a: np.ndarray,
-    pts_b: np.ndarray
+    H: np.ndarray, pts_a: np.ndarray, pts_b: np.ndarray
 ) -> np.ndarray:
     """
     Numba-accelerated projection error computation.
@@ -208,9 +210,7 @@ def compute_projection_errors_vectorized_numba(
 
 ### PHASE 1 OPTIMIZATION: Pure NumPy vectorized version (fallback) ###
 def compute_projection_errors_vectorized_numpy(
-    H: np.ndarray,
-    pts_a: np.ndarray,
-    pts_b: np.ndarray
+    H: np.ndarray, pts_a: np.ndarray, pts_b: np.ndarray
 ) -> np.ndarray:
     """
     Fully vectorized NumPy implementation of projection error computation.
@@ -274,24 +274,34 @@ class ProgressTracker:
 
         # Format ETA
         if eta > 3600:
-            eta_str = f"{eta/3600:.1f}h"
+            eta_str = f"{eta / 3600:.1f}h"
         elif eta > 60:
-            eta_str = f"{eta/60:.1f}m"
+            eta_str = f"{eta / 60:.1f}m"
         else:
             eta_str = f"{eta:.0f}s"
 
         # Calculate percentage
-        percentage = (self.processed / self.total * 100) if self.total > 0 else 0
+        percentage = (
+            (self.processed / self.total * 100) if self.total > 0 else 0
+        )
 
         # Create progress bar
         bar_length = 40
-        filled = int(bar_length * self.processed / self.total) if self.total > 0 else 0
-        bar = '█' * filled + '░' * (bar_length - filled)
+        filled = (
+            int(bar_length * self.processed / self.total)
+            if self.total > 0
+            else 0
+        )
+        bar = "█" * filled + "░" * (bar_length - filled)
 
         # Display
-        print(f"\r{self.desc}: |{bar}| {percentage:.1f}% "
-              f"[{self.processed:,}/{self.total:,}] "
-              f"Rate: {rate:.1f}/s ETA: {eta_str}    ", end='', flush=True)
+        print(
+            f"\r{self.desc}: |{bar}| {percentage:.1f}% "
+            f"[{self.processed:,}/{self.total:,}] "
+            f"Rate: {rate:.1f}/s ETA: {eta_str}    ",
+            end="",
+            flush=True,
+        )
 
     def finish(self):
         """Mark progress as complete."""
@@ -359,11 +369,21 @@ class HomographyDatabaseManager:
             """)
 
             # Create indexes for common queries
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_homo_match_id ON homography_errors(match_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_homo_mean_err ON homography_errors(mean_homo_err)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_homo_valid ON homography_errors(is_valid)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_homo_mean_valid ON homography_errors(mean_homo_err, is_valid)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_match_count ON matches(match_count)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_homo_match_id ON homography_errors(match_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_homo_mean_err ON homography_errors(mean_homo_err)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_homo_valid ON homography_errors(is_valid)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_homo_mean_valid ON homography_errors(mean_homo_err, is_valid)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_matches_match_count ON matches(match_count)"
+            )
 
             ### PHASE 2 OPTIMIZATION: Additional covering index (without subquery) ###
             # Create a standard covering index for the matches table
@@ -384,18 +404,24 @@ class HomographyDatabaseManager:
             cursor = conn.execute("PRAGMA table_info(matches)")
             existing_columns = [row[1] for row in cursor.fetchall()]
 
-            if 'has_homography' not in existing_columns:
-                conn.execute("ALTER TABLE matches ADD COLUMN has_homography INTEGER DEFAULT 0")
+            if "has_homography" not in existing_columns:
+                conn.execute(
+                    "ALTER TABLE matches ADD COLUMN has_homography INTEGER DEFAULT 0"
+                )
 
-            if 'homography_quality' not in existing_columns:
-                conn.execute("ALTER TABLE matches ADD COLUMN homography_quality REAL")
+            if "homography_quality" not in existing_columns:
+                conn.execute(
+                    "ALTER TABLE matches ADD COLUMN homography_quality REAL"
+                )
 
             conn.commit()
 
             ### PHASE 2 OPTIMIZATION: Analyze tables for query optimization ###
             conn.execute("ANALYZE")
 
-            print(f"✓ Homography tables initialized in database: {os.path.basename(self.db_path)}")
+            print(
+                f"✓ Homography tables initialized in database: {os.path.basename(self.db_path)}"
+            )
 
     ### PHASE 2 OPTIMIZATION: Connection pooling ###
     def get_connection(self) -> sqlite3.Connection:
@@ -423,11 +449,14 @@ class HomographyDatabaseManager:
         """Get a specific match by ID for debugging."""
         conn = self.get_connection()
         try:
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT m.id, m.file1, m.file2, m.match_count, m.matches_data
                 FROM matches m
                 WHERE m.id = ?
-            """, (match_id,))
+            """,
+                (match_id,),
+            )
             return cursor.fetchone()
         finally:
             self.return_connection(conn)
@@ -436,25 +465,28 @@ class HomographyDatabaseManager:
         """Get existing homography result for a match."""
         conn = self.get_connection()
         try:
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT sum_homo_err, len_homo_err, mean_homo_err, 
                        std_homo_err, max_homo_err, min_homo_err, 
                        median_homo_err, is_valid, computation_time
                 FROM homography_errors
                 WHERE match_id = ?
-            """, (match_id,))
+            """,
+                (match_id,),
+            )
             result = cursor.fetchone()
             if result:
                 return {
-                    'sum_homo_err': result[0],
-                    'len_homo_err': result[1],
-                    'mean_homo_err': result[2],
-                    'std_homo_err': result[3],
-                    'max_homo_err': result[4],
-                    'min_homo_err': result[5],
-                    'median_homo_err': result[6],
-                    'is_valid': result[7],
-                    'computation_time': result[8]
+                    "sum_homo_err": result[0],
+                    "len_homo_err": result[1],
+                    "mean_homo_err": result[2],
+                    "std_homo_err": result[3],
+                    "max_homo_err": result[4],
+                    "min_homo_err": result[5],
+                    "median_homo_err": result[6],
+                    "is_valid": result[7],
+                    "computation_time": result[8],
                 }
             return None
         finally:
@@ -464,8 +496,13 @@ class HomographyDatabaseManager:
         """Delete existing homography result for a match (useful for recalculation)."""
         conn = self.get_connection()
         try:
-            conn.execute("DELETE FROM homography_errors WHERE match_id = ?", (match_id,))
-            conn.execute("UPDATE matches SET has_homography = 0, homography_quality = NULL WHERE id = ?", (match_id,))
+            conn.execute(
+                "DELETE FROM homography_errors WHERE match_id = ?", (match_id,)
+            )
+            conn.execute(
+                "UPDATE matches SET has_homography = 0, homography_quality = NULL WHERE id = ?",
+                (match_id,),
+            )
             conn.commit()
             # Remove from cache if present
             with self._cache_lock:
@@ -478,10 +515,16 @@ class HomographyDatabaseManager:
         """Load all processed match IDs into memory for fast lookup."""
         with self._cache_lock:
             if self._processed_cache is None:
-                print("Loading processed match IDs into cache...", end='', flush=True)
+                print(
+                    "Loading processed match IDs into cache...",
+                    end="",
+                    flush=True,
+                )
                 conn = self.get_connection()
                 try:
-                    cursor = conn.execute("SELECT match_id FROM homography_errors")
+                    cursor = conn.execute(
+                        "SELECT match_id FROM homography_errors"
+                    )
                     self._processed_cache = set(row[0] for row in cursor)
                 finally:
                     self.return_connection(conn)
@@ -503,10 +546,7 @@ class HomographyDatabaseManager:
 
     ### PHASE 2 OPTIMIZATION: Prefetching for better I/O ###
     def get_unprocessed_matches_batch_prefetch(
-        self,
-        batch_size: int = 1000,
-        offset: int = 0,
-        prefetch_size: int = 3
+        self, batch_size: int = 1000, offset: int = 0, prefetch_size: int = 3
     ) -> Tuple[List[Tuple], List[Tuple]]:
         """
         Get a batch of unprocessed matches with prefetching.
@@ -516,14 +556,17 @@ class HomographyDatabaseManager:
         conn = self.get_connection()
         try:
             # Get current batch
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT m.id, m.file1, m.file2, m.match_count, m.matches_data
                 FROM matches m
                 LEFT JOIN homography_errors he ON m.id = he.match_id
                 WHERE he.match_id IS NULL
                 ORDER BY m.match_count DESC
                 LIMIT ? OFFSET ?
-            """, (batch_size * (1 + prefetch_size), offset))
+            """,
+                (batch_size * (1 + prefetch_size), offset),
+            )
 
             all_results = cursor.fetchall()
 
@@ -539,11 +582,12 @@ class HomographyDatabaseManager:
     ### PHASE 1 OPTIMIZATION: Larger batch fetching ###
 
     def get_unprocessed_matches_batch(
-            self, batch_size: int = 1000, offset: int = 0, min_match_count: int = 0
+        self, batch_size: int = 1000, offset: int = 0, min_match_count: int = 0
     ) -> List[Tuple]:
         conn = self.get_connection()
         try:
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT m.id, m.file1, m.file2, m.match_count, m.matches_data
                 FROM matches m
                 LEFT JOIN homography_errors he ON m.id = he.match_id
@@ -551,28 +595,34 @@ class HomographyDatabaseManager:
                   AND m.match_count > ?
                 ORDER BY m.match_count DESC
                 LIMIT ? OFFSET ?
-            """, (min_match_count, batch_size, offset))
+            """,
+                (min_match_count, batch_size, offset),
+            )
             return cursor.fetchall()
         finally:
             self.return_connection(conn)
 
-
     def count_unprocessed_matches(self, min_match_count: int = 0) -> int:
         conn = self.get_connection()
         try:
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT COUNT(*)
                 FROM matches m
                 LEFT JOIN homography_errors he ON m.id = he.match_id
                 WHERE he.match_id IS NULL
                   AND m.match_count > ?
-            """, (min_match_count,))
+            """,
+                (min_match_count,),
+            )
             return cursor.fetchone()[0]
         finally:
             self.return_connection(conn)
 
     ### PHASE 2 OPTIMIZATION: Batch inserts with prepared statements ###
-    def batch_insert_homography_errors(self, results: List[HomographyResult], batch_size: int = 2000):
+    def batch_insert_homography_errors(
+        self, results: List[HomographyResult], batch_size: int = 2000
+    ):
         """
         Insert homography error results in batches.
 
@@ -588,46 +638,75 @@ class HomographyDatabaseManager:
             conn.execute("BEGIN IMMEDIATE TRANSACTION")
 
             # Prepare statements for better performance
-            insert_stmt = conn.prepare("""
+            insert_stmt = (
+                conn.prepare("""
                 INSERT OR IGNORE INTO homography_errors 
                 (match_id, sum_homo_err, len_homo_err, mean_homo_err, 
                  std_homo_err, max_homo_err, min_homo_err, median_homo_err, 
                  is_valid, computation_time)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """) if hasattr(conn, 'prepare') else None
+            """)
+                if hasattr(conn, "prepare")
+                else None
+            )
 
-            update_stmt = conn.prepare("""
+            update_stmt = (
+                conn.prepare("""
                 UPDATE matches 
                 SET has_homography = 1, 
                     homography_quality = ?
                 WHERE id = ?
-            """) if hasattr(conn, 'prepare') else None
+            """)
+                if hasattr(conn, "prepare")
+                else None
+            )
 
             try:
                 for i in range(0, len(results), batch_size):
-                    batch = results[i:i + batch_size]
+                    batch = results[i : i + batch_size]
 
                     # Insert homography errors
-                    conn.executemany("""
+                    conn.executemany(
+                        """
                         INSERT OR IGNORE INTO homography_errors 
                         (match_id, sum_homo_err, len_homo_err, mean_homo_err, 
                          std_homo_err, max_homo_err, min_homo_err, median_homo_err, 
                          is_valid, computation_time)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, [
-                        (r.match_id, r.sum_homo_err, r.len_homo_err, r.mean_homo_err,
-                         r.std_homo_err, r.max_homo_err, r.min_homo_err, r.median_homo_err,
-                         r.is_valid, r.computation_time)
-                        for r in batch
-                    ])
+                    """,
+                        [
+                            (
+                                r.match_id,
+                                r.sum_homo_err,
+                                r.len_homo_err,
+                                r.mean_homo_err,
+                                r.std_homo_err,
+                                r.max_homo_err,
+                                r.min_homo_err,
+                                r.median_homo_err,
+                                r.is_valid,
+                                r.computation_time,
+                            )
+                            for r in batch
+                        ],
+                    )
 
                     # Update matches table with homography status
-                    conn.executemany("""
+                    conn.executemany(
+                        """
                         UPDATE matches 
                         SET has_homography = 1, 
                             homography_quality = ?
                         WHERE id = ?
-                    """, [(r.mean_homo_err if r.is_valid else None, r.match_id) for r in batch])
+                    """,
+                        [
+                            (
+                                r.mean_homo_err if r.is_valid else None,
+                                r.match_id,
+                            )
+                            for r in batch
+                        ],
+                    )
 
                     total_inserted += len(batch)
 
@@ -643,7 +722,9 @@ class HomographyDatabaseManager:
         finally:
             self.return_connection(conn)
 
-    def get_matches_above_threshold(self, min_match_count: int, limit: int = None) -> List[Tuple]:
+    def get_matches_above_threshold(
+        self, min_match_count: int, limit: int = None
+    ) -> List[Tuple]:
         """Get all matches with match_count above threshold for recalculation."""
         conn = self.get_connection()
         try:
@@ -673,11 +754,17 @@ class HomographyDatabaseManager:
         try:
             # Delete in batches of 500
             for i in range(0, len(match_ids), 500):
-                batch = match_ids[i:i+500]
-                placeholders = ','.join(['?'] * len(batch))
+                batch = match_ids[i : i + 500]
+                placeholders = ",".join(["?"] * len(batch))
 
-                conn.execute(f"DELETE FROM homography_errors WHERE match_id IN ({placeholders})", batch)
-                conn.execute(f"UPDATE matches SET has_homography = 0, homography_quality = NULL WHERE id IN ({placeholders})", batch)
+                conn.execute(
+                    f"DELETE FROM homography_errors WHERE match_id IN ({placeholders})",
+                    batch,
+                )
+                conn.execute(
+                    f"UPDATE matches SET has_homography = 0, homography_quality = NULL WHERE id IN ({placeholders})",
+                    batch,
+                )
 
             conn.commit()
 
@@ -716,20 +803,26 @@ class HomographyDatabaseManager:
             total_matches = cursor3.fetchone()[0]
 
             return {
-                'total_matches': total_matches,
-                'total_computed': result[0] or 0,
-                'valid_count': result[1] or 0,
-                'avg_error': result[2] or 0.0,
-                'min_error': result[3] or 0.0,
-                'max_error': result[4] or 0.0,
-                'avg_computation_time': result[5] or 0.0,
-                'pending_computation': pending,
-                'completion_percentage': ((result[0] or 0) / total_matches * 100) if total_matches > 0 else 0
+                "total_matches": total_matches,
+                "total_computed": result[0] or 0,
+                "valid_count": result[1] or 0,
+                "avg_error": result[2] or 0.0,
+                "min_error": result[3] or 0.0,
+                "max_error": result[4] or 0.0,
+                "avg_computation_time": result[5] or 0.0,
+                "pending_computation": pending,
+                "completion_percentage": (
+                    (result[0] or 0) / total_matches * 100
+                )
+                if total_matches > 0
+                else 0,
             }
         finally:
             self.return_connection(conn)
 
-    def get_best_matches_with_homography(self, limit: int = 1000, max_error: float = 10.0) -> Iterator[Tuple]:
+    def get_best_matches_with_homography(
+        self, limit: int = 1000, max_error: float = 10.0
+    ) -> Iterator[Tuple]:
         """
         Get best matches based on homography error threshold.
 
@@ -742,14 +835,17 @@ class HomographyDatabaseManager:
         """
         conn = self.get_connection()
         try:
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT m.file1, m.file2, m.match_count, h.mean_homo_err, m.is_validated
                 FROM matches m
                 JOIN homography_errors h ON m.id = h.match_id
                 WHERE h.is_valid = 1 AND h.mean_homo_err <= ?
                 ORDER BY h.mean_homo_err ASC
                 LIMIT ?
-            """, (max_error, limit))
+            """,
+                (max_error, limit),
+            )
 
             for row in cursor:
                 yield row
@@ -763,7 +859,7 @@ class ErrorCacheManager:
     def __init__(self, cache_dir: str = "error_cache"):
         """Initialize cache manager with specified directory."""
         self.cache_dir = cache_dir
-        self.stats = {'hits': 0, 'misses': 0}
+        self.stats = {"hits": 0, "misses": 0}
         os.makedirs(cache_dir, exist_ok=True)
 
         ### PHASE 2 OPTIMIZATION: Add LRU memory cache ###
@@ -808,7 +904,7 @@ class ErrorCacheManager:
         ### PHASE 2 OPTIMIZATION: Check memory cache first ###
         with self.cache_lock:
             if cache_key in self.memory_cache:
-                self.stats['hits'] += 1
+                self.stats["hits"] += 1
                 # Move to end (LRU)
                 value = self.memory_cache.pop(cache_key)
                 self.memory_cache[cache_key] = value
@@ -820,13 +916,15 @@ class ErrorCacheManager:
             try:
                 with open(cache_file, "rb") as f:
                     data = pickle.load(f)
-                    self.stats['hits'] += 1
+                    self.stats["hits"] += 1
 
                     # Add to memory cache
                     with self.cache_lock:
                         if len(self.memory_cache) >= self.max_memory_items:
                             # Remove oldest (first) item
-                            self.memory_cache.pop(next(iter(self.memory_cache)))
+                            self.memory_cache.pop(
+                                next(iter(self.memory_cache))
+                            )
                         self.memory_cache[cache_key] = data
 
                     return data
@@ -834,7 +932,7 @@ class ErrorCacheManager:
                 print(f"Error loading cache {cache_file}: {e}")
                 os.remove(cache_file)  # Remove corrupted cache
 
-        self.stats['misses'] += 1
+        self.stats["misses"] += 1
         return None
 
     def save_cache(self, file1: str, file2: str, errors: np.ndarray):
@@ -857,21 +955,21 @@ class ErrorCacheManager:
 
     def get_cache_stats(self) -> Dict:
         """Get cache performance statistics."""
-        total = self.stats['hits'] + self.stats['misses']
-        hit_rate = self.stats['hits'] / total * 100 if total > 0 else 0
+        total = self.stats["hits"] + self.stats["misses"]
+        hit_rate = self.stats["hits"] / total * 100 if total > 0 else 0
         return {
-            'hits': self.stats['hits'],
-            'misses': self.stats['misses'],
-            'hit_rate': hit_rate,
-            'cache_size_mb': self._get_cache_size_mb(),
-            'memory_cache_items': len(self.memory_cache)
+            "hits": self.stats["hits"],
+            "misses": self.stats["misses"],
+            "hit_rate": hit_rate,
+            "cache_size_mb": self._get_cache_size_mb(),
+            "memory_cache_items": len(self.memory_cache),
         }
 
     def _get_cache_size_mb(self) -> float:
         """Calculate total cache size in MB."""
         total_size = 0
         for filename in os.listdir(self.cache_dir):
-            if filename.endswith('.pkl'):
+            if filename.endswith(".pkl"):
                 filepath = os.path.join(self.cache_dir, filename)
                 total_size += os.path.getsize(filepath)
         return total_size / (1024 * 1024)
@@ -887,7 +985,9 @@ class FeatureCache:
         self.max_memory_cache = 1000
         os.makedirs(cache_dir, exist_ok=True)
 
-    def get_features(self, image_path: str) -> Tuple[List[cv2.KeyPoint], np.ndarray]:
+    def get_features(
+        self, image_path: str
+    ) -> Tuple[List[cv2.KeyPoint], np.ndarray]:
         """Get or compute SIFT features for an image."""
         image_key = os.path.basename(image_path)
 
@@ -899,13 +999,21 @@ class FeatureCache:
         cache_file = os.path.join(self.cache_dir, f"{image_key}.pkl")
         if os.path.exists(cache_file):
             try:
-                with open(cache_file, 'rb') as f:
+                with open(cache_file, "rb") as f:
                     kp_data, descriptors = pickle.load(f)
                     # Reconstruct KeyPoint objects
-                    keypoints = [cv2.KeyPoint(x=p['x'], y=p['y'], size=p['size'],
-                                             angle=p['angle'], response=p['response'],
-                                             octave=p['octave'], class_id=p['class_id'])
-                                for p in kp_data]
+                    keypoints = [
+                        cv2.KeyPoint(
+                            x=p["x"],
+                            y=p["y"],
+                            size=p["size"],
+                            angle=p["angle"],
+                            response=p["response"],
+                            octave=p["octave"],
+                            class_id=p["class_id"],
+                        )
+                        for p in kp_data
+                    ]
                     result = (keypoints, descriptors)
 
                     # Add to memory cache if space
@@ -928,11 +1036,19 @@ class FeatureCache:
 
         # Save to disk cache
         try:
-            kp_data = [{'x': kp.pt[0], 'y': kp.pt[1], 'size': kp.size,
-                       'angle': kp.angle, 'response': kp.response,
-                       'octave': kp.octave, 'class_id': kp.class_id}
-                      for kp in keypoints]
-            with open(cache_file, 'wb') as f:
+            kp_data = [
+                {
+                    "x": kp.pt[0],
+                    "y": kp.pt[1],
+                    "size": kp.size,
+                    "angle": kp.angle,
+                    "response": kp.response,
+                    "octave": kp.octave,
+                    "class_id": kp.class_id,
+                }
+                for kp in keypoints
+            ]
+            with open(cache_file, "wb") as f:
                 pickle.dump((kp_data, descriptors), f)
         except Exception as e:
             print(f"Error caching features for {image_key}: {e}")
@@ -949,8 +1065,13 @@ class FeatureCache:
 class HomographyErrorCalculator:
     """Computes homography matrices and projection errors for matched image pairs."""
 
-    def __init__(self, feature_cache: FeatureCache, error_cache: ErrorCacheManager,
-                 image_base_path: str, db_manager: HomographyDatabaseManager):
+    def __init__(
+        self,
+        feature_cache: FeatureCache,
+        error_cache: ErrorCacheManager,
+        image_base_path: str,
+        db_manager: HomographyDatabaseManager,
+    ):
         """Initialize homography error calculator."""
         self.feature_cache = feature_cache
         self.error_cache = error_cache
@@ -966,7 +1087,9 @@ class HomographyErrorCalculator:
         self.use_mps = MPS_AVAILABLE
         self.mps_calls = 0
 
-    def _reconstruct_matches(self, matches_data: bytes) -> List[Tuple[int, int, float]]:
+    def _reconstruct_matches(
+        self, matches_data: bytes
+    ) -> List[Tuple[int, int, float]]:
         """Reconstruct match data from serialized format."""
         try:
             return pickle.loads(matches_data)
@@ -975,7 +1098,14 @@ class HomographyErrorCalculator:
             return []
 
     ### DEBUG FEATURE: Add comprehensive debug method ###
-    def debug_match(self, match_id: int, file1: str, file2: str, matches_data: bytes, force_recalc: bool = False) -> HomographyResult:
+    def debug_match(
+        self,
+        match_id: int,
+        file1: str,
+        file2: str,
+        matches_data: bytes,
+        force_recalc: bool = False,
+    ) -> HomographyResult:
         """
         Debug a specific match with detailed output.
 
@@ -989,9 +1119,9 @@ class HomographyErrorCalculator:
             matches_data: Serialized match data
             force_recalc: If True, ignore cache and recalculate everything
         """
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print(f" DEBUG MODE: Match ID {match_id}")
-        print("="*80)
+        print("=" * 80)
 
         print(f"\n📝 Match Information:")
         print(f"  Match ID: {match_id}")
@@ -1000,12 +1130,24 @@ class HomographyErrorCalculator:
         print(f"  Force recalculation: {force_recalc}")
 
         # Build full paths
-        full_path1 = os.path.join(self.image_base_path,
-                                 file1.split('-')[0] + '-' + file1.split('-')[1] + '-' +
-                                 file1.split('-')[2].split('_')[0], file1)
-        full_path2 = os.path.join(self.image_base_path,
-                                 file2.split('-')[0] + '-' + file2.split('-')[1] + '-' +
-                                 file2.split('-')[2].split('_')[0], file2)
+        full_path1 = os.path.join(
+            self.image_base_path,
+            file1.split("-")[0]
+            + "-"
+            + file1.split("-")[1]
+            + "-"
+            + file1.split("-")[2].split("_")[0],
+            file1,
+        )
+        full_path2 = os.path.join(
+            self.image_base_path,
+            file2.split("-")[0]
+            + "-"
+            + file2.split("-")[1]
+            + "-"
+            + file2.split("-")[2].split("_")[0],
+            file2,
+        )
 
         print(f"\n🗂️ Full Paths:")
         print(f"  Path 1: {full_path1}")
@@ -1025,7 +1167,7 @@ class HomographyErrorCalculator:
                 min_homo_err=-1,
                 median_homo_err=-1,
                 is_valid=False,
-                computation_time=0
+                computation_time=0,
             )
 
         start_time = time.time()
@@ -1040,7 +1182,9 @@ class HomographyErrorCalculator:
             cached_errors = self.error_cache.load_cache(file1, file2)
             if cached_errors is not None:
                 print(f"  ✅ Found cached errors: {len(cached_errors)} errors")
-                print(f"  First 5 errors: {cached_errors[:5] if len(cached_errors) > 5 else cached_errors}")
+                print(
+                    f"  First 5 errors: {cached_errors[:5] if len(cached_errors) > 5 else cached_errors}"
+                )
             else:
                 print(f"  ❌ No cached errors found")
 
@@ -1049,7 +1193,9 @@ class HomographyErrorCalculator:
         matches = self._reconstruct_matches(matches_data)
         print(f"  Total matches: {len(matches)}")
         if len(matches) > 0:
-            print(f"  First 3 matches: {matches[:3] if len(matches) > 3 else matches}")
+            print(
+                f"  First 3 matches: {matches[:3] if len(matches) > 3 else matches}"
+            )
 
         if not matches:
             print(f"  ❌ No matches found in data!")
@@ -1063,7 +1209,7 @@ class HomographyErrorCalculator:
                 min_homo_err=-1,
                 median_homo_err=-1,
                 is_valid=False,
-                computation_time=time.time() - start_time
+                computation_time=time.time() - start_time,
             )
 
         if cached_errors is None or force_recalc:
@@ -1073,8 +1219,12 @@ class HomographyErrorCalculator:
             kp2, des2 = self.feature_cache.get_features(full_path2)
             print(f"  Image 1 keypoints: {len(kp1) if kp1 else 0}")
             print(f"  Image 2 keypoints: {len(kp2) if kp2 else 0}")
-            print(f"  Image 1 descriptors shape: {des1.shape if des1 is not None else None}")
-            print(f"  Image 2 descriptors shape: {des2.shape if des2 is not None else None}")
+            print(
+                f"  Image 1 descriptors shape: {des1.shape if des1 is not None else None}"
+            )
+            print(
+                f"  Image 2 descriptors shape: {des2.shape if des2 is not None else None}"
+            )
 
             if des1 is None or des2 is None:
                 print(f"  ❌ Failed to extract features!")
@@ -1088,7 +1238,7 @@ class HomographyErrorCalculator:
                     min_homo_err=-1,
                     median_homo_err=-1,
                     is_valid=False,
-                    computation_time=time.time() - start_time
+                    computation_time=time.time() - start_time,
                 )
 
             # Extract matched points
@@ -1103,7 +1253,9 @@ class HomographyErrorCalculator:
             # Compute homography
             print(f"\n🔢 Computing Homography:")
             if len(matches) < 4:
-                print(f"  ❌ Not enough matches for homography (need 4, have {len(matches)})")
+                print(
+                    f"  ❌ Not enough matches for homography (need 4, have {len(matches)})"
+                )
                 return HomographyResult(
                     match_id=match_id,
                     sum_homo_err=-1,
@@ -1114,7 +1266,7 @@ class HomographyErrorCalculator:
                     min_homo_err=-1,
                     median_homo_err=-1,
                     is_valid=False,
-                    computation_time=time.time() - start_time
+                    computation_time=time.time() - start_time,
                 )
 
             try:
@@ -1131,12 +1283,14 @@ class HomographyErrorCalculator:
                         min_homo_err=-1,
                         median_homo_err=-1,
                         is_valid=False,
-                        computation_time=time.time() - start_time
+                        computation_time=time.time() - start_time,
                     )
 
                 print(f"  ✅ Homography matrix computed")
                 print(f"  Homography matrix:\n{H}")
-                print(f"  RANSAC inliers: {np.sum(mask) if mask is not None else 0}/{len(matches)}")
+                print(
+                    f"  RANSAC inliers: {np.sum(mask) if mask is not None else 0}/{len(matches)}"
+                )
 
                 # Convert to float32
                 H = H.astype(np.float32)
@@ -1153,7 +1307,7 @@ class HomographyErrorCalculator:
                     min_homo_err=-1,
                     median_homo_err=-1,
                     is_valid=False,
-                    computation_time=time.time() - start_time
+                    computation_time=time.time() - start_time,
                 )
 
             # Compute projection errors
@@ -1170,10 +1324,14 @@ class HomographyErrorCalculator:
                     errors = compute_projection_errors_mps(H, ptsA, ptsB)
                 elif self.use_numba:
                     print(f"    Using: Numba JIT acceleration")
-                    errors = compute_projection_errors_vectorized_numba(H, ptsA, ptsB)
+                    errors = compute_projection_errors_vectorized_numba(
+                        H, ptsA, ptsB
+                    )
                 else:
                     print(f"    Using: NumPy vectorization")
-                    errors = compute_projection_errors_vectorized_numpy(H, ptsA, ptsB)
+                    errors = compute_projection_errors_vectorized_numpy(
+                        H, ptsA, ptsB
+                    )
             else:
                 print(f"    Using: Loop-based computation (small dataset)")
                 errors = []
@@ -1184,7 +1342,7 @@ class HomographyErrorCalculator:
                     projected = H @ pt_b_h
 
                     if abs(projected[2]) < 1e-8:
-                        errors.append(float('inf'))
+                        errors.append(float("inf"))
                         continue
 
                     projected_normalized = projected[:2] / projected[2]
@@ -1217,21 +1375,31 @@ class HomographyErrorCalculator:
             print(f"    Min: {np.min(finite_errors):.3f}")
             print(f"    Max: {np.max(finite_errors):.3f}")
             print(f"    Median: {np.median(finite_errors):.3f}")
-            print(f"    25th percentile: {np.percentile(finite_errors, 25):.3f}")
-            print(f"    75th percentile: {np.percentile(finite_errors, 75):.3f}")
+            print(
+                f"    25th percentile: {np.percentile(finite_errors, 25):.3f}"
+            )
+            print(
+                f"    75th percentile: {np.percentile(finite_errors, 75):.3f}"
+            )
 
             # Show error distribution
             print(f"\n  Error Distribution:")
-            bins = [0, 1, 2, 5, 10, 20, 50, 100, float('inf')]
+            bins = [0, 1, 2, 5, 10, 20, 50, 100, float("inf")]
             hist, _ = np.histogram(finite_errors, bins=bins)
-            for i in range(len(bins)-1):
-                if bins[i+1] == float('inf'):
-                    print(f"    {bins[i]:3.0f}+ px: {hist[i]:4d} ({hist[i]/len(finite_errors)*100:5.1f}%)")
+            for i in range(len(bins) - 1):
+                if bins[i + 1] == float("inf"):
+                    print(
+                        f"    {bins[i]:3.0f}+ px: {hist[i]:4d} ({hist[i] / len(finite_errors) * 100:5.1f}%)"
+                    )
                 else:
-                    print(f"    {bins[i]:3.0f}-{bins[i+1]:3.0f} px: {hist[i]:4d} ({hist[i]/len(finite_errors)*100:5.1f}%)")
+                    print(
+                        f"    {bins[i]:3.0f}-{bins[i + 1]:3.0f} px: {hist[i]:4d} ({hist[i] / len(finite_errors) * 100:5.1f}%)"
+                    )
 
             # Show sample of errors
-            print(f"\n  First 10 errors: {finite_errors[:10] if len(finite_errors) > 10 else finite_errors}")
+            print(
+                f"\n  First 10 errors: {finite_errors[:10] if len(finite_errors) > 10 else finite_errors}"
+            )
 
             # Create result
             result = HomographyResult(
@@ -1239,12 +1407,14 @@ class HomographyErrorCalculator:
                 sum_homo_err=float(np.sum(finite_errors)),
                 len_homo_err=len(finite_errors),
                 mean_homo_err=float(np.mean(finite_errors)),
-                std_homo_err=float(np.std(finite_errors, ddof=1)) if len(finite_errors) > 1 else 0.0,
+                std_homo_err=float(np.std(finite_errors, ddof=1))
+                if len(finite_errors) > 1
+                else 0.0,
                 max_homo_err=float(np.max(finite_errors)),
                 min_homo_err=float(np.min(finite_errors)),
                 median_homo_err=float(np.median(finite_errors)),
                 is_valid=True,
-                computation_time=time.time() - start_time
+                computation_time=time.time() - start_time,
             )
 
             print(f"\n✅ Final Result:")
@@ -1265,7 +1435,7 @@ class HomographyErrorCalculator:
                 min_homo_err=-1,
                 median_homo_err=-1,
                 is_valid=False,
-                computation_time=time.time() - start_time
+                computation_time=time.time() - start_time,
             )
 
     ### PHASE 2 OPTIMIZATION: Enhanced error computation with MPS ###
@@ -1273,7 +1443,7 @@ class HomographyErrorCalculator:
         self,
         kp1: List[cv2.KeyPoint],
         kp2: List[cv2.KeyPoint],
-        matches: List[Tuple[int, int, float]]
+        matches: List[Tuple[int, int, float]],
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Compute homography matrix and projection errors.
@@ -1302,16 +1472,22 @@ class HomographyErrorCalculator:
         # OPTIMIZATION: Choose best acceleration method
         if len(matches) > 20:  # Vectorization worth it for larger sets
             # Priority: MPS > Numba > NumPy
-            if self.use_mps and len(matches) > 100:  # MPS overhead worth it for large sets
+            if (
+                self.use_mps and len(matches) > 100
+            ):  # MPS overhead worth it for large sets
                 self.mps_calls += 1
                 self.vectorized_calls += 1
                 errors = compute_projection_errors_mps(H, ptsA, ptsB)
             elif self.use_numba:
                 self.vectorized_calls += 1
-                errors = compute_projection_errors_vectorized_numba(H, ptsA, ptsB)
+                errors = compute_projection_errors_vectorized_numba(
+                    H, ptsA, ptsB
+                )
             else:
                 self.vectorized_calls += 1
-                errors = compute_projection_errors_vectorized_numpy(H, ptsA, ptsB)
+                errors = compute_projection_errors_vectorized_numpy(
+                    H, ptsA, ptsB
+                )
         else:
             # For small sets, keep original loop (less overhead)
             self.loop_calls += 1
@@ -1323,7 +1499,7 @@ class HomographyErrorCalculator:
                 projected = H @ pt_b_h
 
                 if abs(projected[2]) < 1e-8:
-                    errors.append(float('inf'))
+                    errors.append(float("inf"))
                     continue
 
                 projected_normalized = projected[:2] / projected[2]
@@ -1334,11 +1510,7 @@ class HomographyErrorCalculator:
         return H, errors
 
     def calculate_errors_for_match(
-        self,
-        match_id: int,
-        file1: str,
-        file2: str,
-        matches_data: bytes
+        self, match_id: int, file1: str, file2: str, matches_data: bytes
     ) -> Optional[HomographyResult]:
         """
         Calculate homography errors for a single match.
@@ -1352,11 +1524,26 @@ class HomographyErrorCalculator:
         start_time = time.time()
 
         # Build full paths
-        full_path1 = os.path.join(self.image_base_path, file1.split('-')[0] + '-' + file1.split('-')[1] + '-' + file1.split('-')[2].split('_')[0], file1)
-        full_path2 = os.path.join(self.image_base_path, file2.split('-')[0] + '-' + file2.split('-')[1] + '-' + file2.split('-')[2].split('_')[0], file2)
+        full_path1 = os.path.join(
+            self.image_base_path,
+            file1.split("-")[0]
+            + "-"
+            + file1.split("-")[1]
+            + "-"
+            + file1.split("-")[2].split("_")[0],
+            file1,
+        )
+        full_path2 = os.path.join(
+            self.image_base_path,
+            file2.split("-")[0]
+            + "-"
+            + file2.split("-")[1]
+            + "-"
+            + file2.split("-")[2].split("_")[0],
+            file2,
+        )
 
         if os.path.exists(full_path1) and os.path.exists(full_path2):
-
             # Check cache first
             cached_errors = self.error_cache.load_cache(file1, file2)
 
@@ -1375,7 +1562,7 @@ class HomographyErrorCalculator:
                         min_homo_err=-1,
                         median_homo_err=-1,
                         is_valid=False,
-                        computation_time=time.time() - start_time
+                        computation_time=time.time() - start_time,
                     )
 
                 try:
@@ -1394,11 +1581,13 @@ class HomographyErrorCalculator:
                             min_homo_err=-1,
                             median_homo_err=-1,
                             is_valid=False,
-                            computation_time=time.time() - start_time
+                            computation_time=time.time() - start_time,
                         )
 
                     # Compute homography and errors (NOW OPTIMIZED)
-                    H, errors = self._compute_homography_and_errors(kp1, kp2, matches)
+                    H, errors = self._compute_homography_and_errors(
+                        kp1, kp2, matches
+                    )
 
                     if len(errors) > 0:
                         # Save to cache
@@ -1423,12 +1612,14 @@ class HomographyErrorCalculator:
                         sum_homo_err=float(np.sum(finite_errors)),
                         len_homo_err=len(finite_errors),
                         mean_homo_err=float(np.mean(finite_errors)),
-                        std_homo_err=float(np.std(finite_errors, ddof=1)) if len(finite_errors) > 1 else 0.0,
+                        std_homo_err=float(np.std(finite_errors, ddof=1))
+                        if len(finite_errors) > 1
+                        else 0.0,
                         max_homo_err=float(np.max(finite_errors)),
                         min_homo_err=float(np.min(finite_errors)),
                         median_homo_err=float(np.median(finite_errors)),
                         is_valid=True,
-                        computation_time=time.time() - start_time
+                        computation_time=time.time() - start_time,
                     )
 
         # Return invalid result
@@ -1442,7 +1633,7 @@ class HomographyErrorCalculator:
             min_homo_err=-1,
             median_homo_err=-1,
             is_valid=False,
-            computation_time=time.time() - start_time
+            computation_time=time.time() - start_time,
         )
 
     def print_optimization_stats(self):
@@ -1450,12 +1641,18 @@ class HomographyErrorCalculator:
         total = self.vectorized_calls + self.loop_calls
         if total > 0:
             print(f"\n📊 Optimization Statistics:")
-            print(f"  Vectorized computations: {self.vectorized_calls} ({self.vectorized_calls/total*100:.1f}%)")
-            print(f"  Loop computations: {self.loop_calls} ({self.loop_calls/total*100:.1f}%)")
+            print(
+                f"  Vectorized computations: {self.vectorized_calls} ({self.vectorized_calls / total * 100:.1f}%)"
+            )
+            print(
+                f"  Loop computations: {self.loop_calls} ({self.loop_calls / total * 100:.1f}%)"
+            )
 
             ### PHASE 2 OPTIMIZATION: Show MPS stats ###
             if self.use_mps:
-                print(f"  MPS GPU computations: {self.mps_calls} ({self.mps_calls/total*100:.1f}%)")
+                print(
+                    f"  MPS GPU computations: {self.mps_calls} ({self.mps_calls / total * 100:.1f}%)"
+                )
                 print(f"  Acceleration: Apple Silicon MPS enabled")
             elif self.use_numba:
                 print(f"  Acceleration: Numba JIT enabled")
@@ -1472,7 +1669,9 @@ class DynamicBatchSizer:
         self.cpu_count = os.cpu_count() or 4
         try:
             self.memory_gb = psutil.virtual_memory().total / (1024**3)
-            self.available_memory_gb = psutil.virtual_memory().available / (1024**3)
+            self.available_memory_gb = psutil.virtual_memory().available / (
+                1024**3
+            )
         except:
             self.memory_gb = 8
             self.available_memory_gb = 4
@@ -1531,7 +1730,7 @@ class ParallelHomographyProcessor:
             self.feature_cache,
             self.error_cache,
             image_base_path,
-            self.db  # Pass DB manager for checking processed status
+            self.db,  # Pass DB manager for checking processed status
         )
 
         # Progress tracking
@@ -1542,7 +1741,9 @@ class ParallelHomographyProcessor:
         self.min_match_count = min_match_count
 
     ### DEBUG FEATURE: Add recalculation method for matches above threshold ###
-    def recalculate_matches_above_threshold(self, min_match_count: int, limit: int = None, batch_size: int = None):
+    def recalculate_matches_above_threshold(
+        self, min_match_count: int, limit: int = None, batch_size: int = None
+    ):
         """
         Recalculate homography for all matches above a given match count threshold.
 
@@ -1551,13 +1752,17 @@ class ParallelHomographyProcessor:
             limit: Maximum number of matches to recalculate (None for all)
             batch_size: Batch size for processing
         """
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print(" RECALCULATE MATCHES ABOVE THRESHOLD")
-        print("="*80)
+        print("=" * 80)
 
         print(f"\n📊 Parameters:")
         print(f"  Minimum match count: {min_match_count:,}")
-        print(f"  Limit: {limit:,}" if limit else "  Limit: No limit (process all)")
+        print(
+            f"  Limit: {limit:,}"
+            if limit
+            else "  Limit: No limit (process all)"
+        )
 
         # Get matches above threshold
         print(f"\n🔍 Finding matches with match_count > {min_match_count}...")
@@ -1577,27 +1782,37 @@ class ParallelHomographyProcessor:
             if self.db.get_homography_result(match_id):
                 existing_results.append(match_id)
 
-        print(f"  ℹ️ {len(existing_results):,} matches already have homography results")
+        print(
+            f"  ℹ️ {len(existing_results):,} matches already have homography results"
+        )
 
         # Ask for confirmation
-        print(f"\n⚠️  This will DELETE existing results and recalculate {total_matches:,} matches")
+        print(
+            f"\n⚠️  This will DELETE existing results and recalculate {total_matches:,} matches"
+        )
         response = input("  Continue? (yes/no): ").strip().lower()
 
-        if response not in ['yes', 'y']:
+        if response not in ["yes", "y"]:
             print("  Operation cancelled")
             return
 
         # Delete existing results
         if existing_results:
-            print(f"\n🗑️ Deleting {len(existing_results):,} existing results...")
+            print(
+                f"\n🗑️ Deleting {len(existing_results):,} existing results..."
+            )
             self.db.delete_homography_results_batch(existing_results)
 
         # Clear cache for affected pairs
         print(f"\n🧹 Clearing error cache for affected image pairs...")
-        for _, file1, file2, _, _ in matches[:100]:  # Clear first 100 to avoid too much time
+        for _, file1, file2, _, _ in matches[
+            :100
+        ]:  # Clear first 100 to avoid too much time
             self.error_cache.clear_cache_for_pair(file1, file2)
         if total_matches > 100:
-            print(f"  ℹ️ Cleared cache for first 100 pairs (rest will be overwritten)")
+            print(
+                f"  ℹ️ Cleared cache for first 100 pairs (rest will be overwritten)"
+            )
 
         # Process matches
         print(f"\n🚀 Starting recalculation of {total_matches:,} matches...")
@@ -1612,9 +1827,11 @@ class ParallelHomographyProcessor:
         invalid_count = 0
 
         # Process in batches with progress bar
-        with tqdm(total=total_matches, desc="Recalculating", unit="matches") as pbar:
+        with tqdm(
+            total=total_matches, desc="Recalculating", unit="matches"
+        ) as pbar:
             for i in range(0, total_matches, batch_size):
-                batch = matches[i:i+batch_size]
+                batch = matches[i : i + batch_size]
                 batch_results = []
 
                 for match_id, file1, file2, match_count, matches_data in batch:
@@ -1634,25 +1851,31 @@ class ParallelHomographyProcessor:
                         print(f"\n⚠️ Error processing match {match_id}: {e}")
                         invalid_count += 1
                         # Add failed result
-                        batch_results.append(HomographyResult(
-                            match_id=match_id,
-                            sum_homo_err=-1,
-                            len_homo_err=0,
-                            mean_homo_err=-1,
-                            std_homo_err=-1,
-                            max_homo_err=-1,
-                            min_homo_err=-1,
-                            median_homo_err=-1,
-                            is_valid=False,
-                            computation_time=0
-                        ))
+                        batch_results.append(
+                            HomographyResult(
+                                match_id=match_id,
+                                sum_homo_err=-1,
+                                len_homo_err=0,
+                                mean_homo_err=-1,
+                                std_homo_err=-1,
+                                max_homo_err=-1,
+                                min_homo_err=-1,
+                                median_homo_err=-1,
+                                is_valid=False,
+                                computation_time=0,
+                            )
+                        )
 
                     pbar.update(1)
-                    pbar.set_postfix({
-                        'Valid': valid_count,
-                        'Invalid': invalid_count,
-                        'Success%': f"{valid_count/(valid_count+invalid_count)*100:.1f}" if (valid_count+invalid_count) > 0 else "0"
-                    })
+                    pbar.set_postfix(
+                        {
+                            "Valid": valid_count,
+                            "Invalid": invalid_count,
+                            "Success%": f"{valid_count / (valid_count + invalid_count) * 100:.1f}"
+                            if (valid_count + invalid_count) > 0
+                            else "0",
+                        }
+                    )
 
                 # Save batch to database
                 if batch_results:
@@ -1668,16 +1891,24 @@ class ParallelHomographyProcessor:
 
         # Print summary
         elapsed_time = time.time() - start_time
-        print(f"\n" + "="*80)
+        print(f"\n" + "=" * 80)
         print(" RECALCULATION COMPLETED")
-        print("="*80)
+        print("=" * 80)
         print(f"\n📊 Summary:")
         print(f"  Total processed: {total_matches:,}")
-        print(f"  Valid results: {valid_count:,} ({valid_count/total_matches*100:.1f}%)")
-        print(f"  Invalid results: {invalid_count:,} ({invalid_count/total_matches*100:.1f}%)")
-        print(f"  Time elapsed: {elapsed_time:.1f} seconds ({elapsed_time/60:.1f} minutes)")
-        print(f"  Processing rate: {total_matches/elapsed_time:.1f} matches/second")
-        print("\n" + "="*80)
+        print(
+            f"  Valid results: {valid_count:,} ({valid_count / total_matches * 100:.1f}%)"
+        )
+        print(
+            f"  Invalid results: {invalid_count:,} ({invalid_count / total_matches * 100:.1f}%)"
+        )
+        print(
+            f"  Time elapsed: {elapsed_time:.1f} seconds ({elapsed_time / 60:.1f} minutes)"
+        )
+        print(
+            f"  Processing rate: {total_matches / elapsed_time:.1f} matches/second"
+        )
+        print("\n" + "=" * 80)
 
     ### DEBUG FEATURE: Add debug method for single match ###
     def debug_single_match(self, match_id: int, force_recalc: bool = False):
@@ -1688,9 +1919,9 @@ class ParallelHomographyProcessor:
             match_id: ID of the match to debug
             force_recalc: If True, force recalculation even if result exists
         """
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print(" HOMOGRAPHY DEBUG MODE")
-        print("="*80)
+        print("=" * 80)
 
         # Check if match exists in database
         print(f"\n🔍 Looking up match ID {match_id}...")
@@ -1711,20 +1942,30 @@ class ParallelHomographyProcessor:
         if existing_result and not force_recalc:
             print(f"\n📊 Existing homography result found:")
             print(f"  Valid: {existing_result['is_valid']}")
-            print(f"  Mean error: {existing_result['mean_homo_err']:.3f} pixels")
+            print(
+                f"  Mean error: {existing_result['mean_homo_err']:.3f} pixels"
+            )
             print(f"  Std error: {existing_result['std_homo_err']:.3f} pixels")
             print(f"  Min error: {existing_result['min_homo_err']:.3f} pixels")
             print(f"  Max error: {existing_result['max_homo_err']:.3f} pixels")
-            print(f"  Median error: {existing_result['median_homo_err']:.3f} pixels")
-            print(f"  Computation time: {existing_result['computation_time']:.3f} seconds")
+            print(
+                f"  Median error: {existing_result['median_homo_err']:.3f} pixels"
+            )
+            print(
+                f"  Computation time: {existing_result['computation_time']:.3f} seconds"
+            )
             print(f"\n  To recalculate, use --force-recalc flag")
         else:
             if existing_result and force_recalc:
-                print(f"\n🔧 Force recalculation requested - deleting existing result")
+                print(
+                    f"\n🔧 Force recalculation requested - deleting existing result"
+                )
                 self.db.delete_homography_result(match_id)
 
             # Run debug calculation
-            result = self.calculator.debug_match(match_id, file1, file2, matches_data, force_recalc)
+            result = self.calculator.debug_match(
+                match_id, file1, file2, matches_data, force_recalc
+            )
 
             # Save to database
             if result and result.is_valid:
@@ -1732,9 +1973,11 @@ class ParallelHomographyProcessor:
                 self.db.batch_insert_homography_errors([result])
                 print(f"✅ Result saved successfully")
 
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
 
-    def _process_batch(self, batch_data: Tuple[List[Tuple], int, int]) -> Tuple[List[HomographyResult], int, int, int]:
+    def _process_batch(
+        self, batch_data: Tuple[List[Tuple], int, int]
+    ) -> Tuple[List[HomographyResult], int, int, int]:
         """
         Process a batch of matches with progress tracking.
 
@@ -1770,24 +2013,28 @@ class ParallelHomographyProcessor:
             except Exception as e:
                 print(f"\n⚠️  Error processing match {match_id}: {e}")
                 # Add failed result
-                results.append(HomographyResult(
-                    match_id=match_id,
-                    sum_homo_err=-1,
-                    len_homo_err=0,
-                    mean_homo_err=-1,
-                    std_homo_err=-1,
-                    max_homo_err=-1,
-                    min_homo_err=-1,
-                    median_homo_err=-1,
-                    is_valid=False,
-                    computation_time=0
-                ))
+                results.append(
+                    HomographyResult(
+                        match_id=match_id,
+                        sum_homo_err=-1,
+                        len_homo_err=0,
+                        mean_homo_err=-1,
+                        std_homo_err=-1,
+                        max_homo_err=-1,
+                        min_homo_err=-1,
+                        median_homo_err=-1,
+                        is_valid=False,
+                        computation_time=0,
+                    )
+                )
                 invalid += 1
 
         return results, len(results), valid, invalid
 
     ### PHASE 2 OPTIMIZATION: Enhanced batch processing ###
-    def run_parallel_processing(self, batch_size: int = None, limit: int = None):
+    def run_parallel_processing(
+        self, batch_size: int = None, limit: int = None
+    ):
         """
         Process all unprocessed matches in parallel with comprehensive progress tracking.
 
@@ -1795,9 +2042,9 @@ class ParallelHomographyProcessor:
         """
         start_time = time.time()
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print(" HOMOGRAPHY ERROR CALCULATION (PHASE 2 OPTIMIZED)")
-        print("="*70)
+        print("=" * 70)
 
         ### PHASE 2 OPTIMIZATION: Show all optimizations ###
         print("\n🚀 Active Optimizations:")
@@ -1821,8 +2068,10 @@ class ParallelHomographyProcessor:
         self.db.load_processed_ids_to_cache()
 
         # Count unprocessed matches
-        print("  Counting unprocessed matches...", end='', flush=True)
-        unprocessed_count = self.db.count_unprocessed_matches(self.min_match_count)
+        print("  Counting unprocessed matches...", end="", flush=True)
+        unprocessed_count = self.db.count_unprocessed_matches(
+            self.min_match_count
+        )
         print(f" {unprocessed_count:,} found")
 
         if unprocessed_count == 0:
@@ -1859,16 +2108,22 @@ class ParallelHomographyProcessor:
         batch_idx = 1
 
         # Progress bar for batch preparation
-        prep_pbar = tqdm(total=total_to_process, desc="  Preparing", unit="matches")
+        prep_pbar = tqdm(
+            total=total_to_process, desc="  Preparing", unit="matches"
+        )
 
         while offset < total_to_process:
             current_batch_size = min(batch_size, total_to_process - offset)
-            batch = self.db.get_unprocessed_matches_batch(current_batch_size, offset, self.min_match_count)
+            batch = self.db.get_unprocessed_matches_batch(
+                current_batch_size, offset, self.min_match_count
+            )
 
             if not batch:
                 break
 
-            batches.append((batch, batch_idx, 0))  # Will update total_batches later
+            batches.append(
+                (batch, batch_idx, 0)
+            )  # Will update total_batches later
             batch_idx += 1
             offset += len(batch)
             prep_pbar.update(len(batch))
@@ -1883,7 +2138,7 @@ class ParallelHomographyProcessor:
 
         # Process in parallel
         print("\n🚀 Processing matches:")
-        print("-"*70)
+        print("-" * 70)
 
         all_results = []
         total_computed = 0
@@ -1895,7 +2150,7 @@ class ParallelHomographyProcessor:
             total=total_to_process,
             desc="Overall Progress",
             unit="matches",
-            bar_format='{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
+            bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]",
         )
 
         # Batch progress bar
@@ -1903,7 +2158,7 @@ class ParallelHomographyProcessor:
             total=total_batches,
             desc="Batches Complete",
             unit="batch",
-            bar_format='{desc}: {percentage:3.0f}%|{bar}| {n}/{total} [{elapsed}<{remaining}]'
+            bar_format="{desc}: {percentage:3.0f}%|{bar}| {n}/{total} [{elapsed}<{remaining}]",
         )
 
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
@@ -1929,12 +2184,14 @@ class ParallelHomographyProcessor:
 
                 # Update main progress bar postfix with statistics
                 cache_stats = self.error_cache.get_cache_stats()
-                main_pbar.set_postfix({
-                    'Valid': f'{total_valid:,}',
-                    'Invalid': f'{total_invalid:,}',
-                    'Cache': f'{cache_stats["hits"]}/{cache_stats["hits"]+cache_stats["misses"]}',
-                    'Mem': f'{cache_stats["memory_cache_items"]}'
-                })
+                main_pbar.set_postfix(
+                    {
+                        "Valid": f"{total_valid:,}",
+                        "Invalid": f"{total_invalid:,}",
+                        "Cache": f"{cache_stats['hits']}/{cache_stats['hits'] + cache_stats['misses']}",
+                        "Mem": f"{cache_stats['memory_cache_items']}",
+                    }
+                )
 
                 ### PHASE 2 OPTIMIZATION: Larger save batches ###
                 if len(all_results) >= 3000:  # Increased from 2000
@@ -1949,7 +2206,9 @@ class ParallelHomographyProcessor:
 
         # Save remaining results
         if all_results:
-            print("\n💾 Saving final results to database...", end='', flush=True)
+            print(
+                "\n💾 Saving final results to database...", end="", flush=True
+            )
             self.db.batch_insert_homography_errors(all_results)
             print(" ✓")
 
@@ -1958,20 +2217,34 @@ class ParallelHomographyProcessor:
         stats = self.db.get_homography_statistics()
         cache_stats = self.error_cache.get_cache_stats()
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print(" PROCESSING COMPLETED")
-        print("="*70)
+        print("=" * 70)
 
         # Time statistics
         print(f"\n⏱️  Time Statistics:")
-        print(f"  Total time: {elapsed_time:.1f} seconds ({elapsed_time/60:.1f} minutes)")
-        print(f"  Processing rate: {total_computed / elapsed_time:.1f} matches/second" if elapsed_time > 0 else "N/A")
+        print(
+            f"  Total time: {elapsed_time:.1f} seconds ({elapsed_time / 60:.1f} minutes)"
+        )
+        print(
+            f"  Processing rate: {total_computed / elapsed_time:.1f} matches/second"
+            if elapsed_time > 0
+            else "N/A"
+        )
 
         # Processing statistics
         print(f"\n📊 Processing Results:")
         print(f"  Newly computed: {total_computed:,}")
-        print(f"  Valid results: {total_valid:,} ({total_valid/total_computed*100:.1f}%)" if total_computed > 0 else "  Valid results: 0")
-        print(f"  Invalid results: {total_invalid:,} ({total_invalid/total_computed*100:.1f}%)" if total_computed > 0 else "  Invalid results: 0")
+        print(
+            f"  Valid results: {total_valid:,} ({total_valid / total_computed * 100:.1f}%)"
+            if total_computed > 0
+            else "  Valid results: 0"
+        )
+        print(
+            f"  Invalid results: {total_invalid:,} ({total_invalid / total_computed * 100:.1f}%)"
+            if total_computed > 0
+            else "  Invalid results: 0"
+        )
 
         # Database statistics
         print(f"\n📈 Database Statistics:")
@@ -1981,14 +2254,16 @@ class ParallelHomographyProcessor:
 
         # Progress bar for completion
         completion_bar_length = 50
-        filled = int(completion_bar_length * stats['completion_percentage'] / 100)
-        bar = '█' * filled + '░' * (completion_bar_length - filled)
+        filled = int(
+            completion_bar_length * stats["completion_percentage"] / 100
+        )
+        bar = "█" * filled + "░" * (completion_bar_length - filled)
         print(f"  Progress: |{bar}| {stats['completion_percentage']:.1f}%")
 
         print(f"  Remaining: {stats['pending_computation']:,}")
 
         # Error statistics
-        if stats['valid_count'] > 0:
+        if stats["valid_count"] > 0:
             print(f"\n📐 Error Statistics (valid matches only):")
             print(f"  Average error: {stats['avg_error']:.2f} pixels")
             print(f"  Min error: {stats['min_error']:.2f} pixels")
@@ -2005,19 +2280,23 @@ class ParallelHomographyProcessor:
         ### PHASE 2 OPTIMIZATION: Show optimization stats ###
         self.calculator.print_optimization_stats()
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
 
-    def export_results_to_csv(self, output_path: str, limit: int = 10000, max_error: float = 10.0):
+    def export_results_to_csv(
+        self, output_path: str, limit: int = 10000, max_error: float = 10.0
+    ):
         """Export best matches with homography errors to CSV with progress tracking."""
         print(f"\n📁 Exporting matches to CSV")
         print(f"  Output file: {output_path}")
         print(f"  Max error threshold: {max_error} pixels")
         print(f"  Max results: {limit:,}")
 
-        print("\n  Querying database...", end='', flush=True)
+        print("\n  Querying database...", end="", flush=True)
 
         # Get count first for progress bar
-        results = list(self.db.get_best_matches_with_homography(limit, max_error))
+        results = list(
+            self.db.get_best_matches_with_homography(limit, max_error)
+        )
         total_results = len(results)
         print(f" found {total_results:,} matches")
 
@@ -2028,12 +2307,24 @@ class ParallelHomographyProcessor:
         print("  Writing CSV file...")
 
         # Progress bar for export
-        with tqdm(total=total_results, desc="  Exporting", unit="rows") as pbar:
-            with open(output_path, 'w', newline='', encoding='utf-8') as csvfile:
+        with tqdm(
+            total=total_results, desc="  Exporting", unit="rows"
+        ) as pbar:
+            with open(
+                output_path, "w", newline="", encoding="utf-8"
+            ) as csvfile:
                 writer = csv.writer(csvfile)
 
                 # Write header
-                writer.writerow(['file1', 'file2', 'match_count', 'mean_homo_err', 'is_validated'])
+                writer.writerow(
+                    [
+                        "file1",
+                        "file2",
+                        "match_count",
+                        "mean_homo_err",
+                        "is_validated",
+                    ]
+                )
                 pbar.update(0)
 
                 # Write data
@@ -2041,37 +2332,64 @@ class ParallelHomographyProcessor:
                     writer.writerow(row)
                     pbar.update(1)
 
-        print(f"\n✅ Successfully exported {total_results:,} matches to {os.path.basename(output_path)}")
+        print(
+            f"\n✅ Successfully exported {total_results:,} matches to {os.path.basename(output_path)}"
+        )
 
 
 def load_config():
     """Load configuration from environment variables."""
     load_dotenv()
 
-    base_path = os.getenv('BASE_PATH')
+    base_path = os.getenv("BASE_PATH")
     if not base_path:
         raise ValueError("BASE_PATH not found in .env file")
 
-    model_type = os.getenv('MODEL_TYPE', 'default')
+    model_type = os.getenv("MODEL_TYPE", "default")
 
     ### PHASE 2 OPTIMIZATION: Dynamic sizing by default ###
     batch_sizer = DynamicBatchSizer()
 
     config = {
-        'base_path': base_path,
-        'model_type': model_type,
-        'db_path': os.path.join(base_path, f"OUTPUT_{model_type}", os.getenv('DB_NAME', 'matches.db')),
-        'image_base_path': os.path.join(base_path, f"OUTPUT_{model_type}", os.getenv('PATCHES_DIR', 'patches')),
-        'feature_cache_dir': os.path.join(base_path, f"OUTPUT_{model_type}", os.getenv('PATCHES_CACHE', 'cache')),
-        'error_cache_dir': os.path.join(base_path, f"OUTPUT_{model_type}", os.getenv('ERROR_CACHE', 'error_cache')),
-        'output_csv': os.path.join(base_path, f"OUTPUT_{model_type}", os.getenv('HOMO_CSV', 'homography_matches.csv')),
-        'num_workers': int(os.getenv('NUM_WORKERS', str(batch_sizer.get_optimal_workers(8)))),
-        'batch_size': int(os.getenv('BATCH_SIZE', str(batch_sizer.get_optimal_batch_size(500)))),
-        'process_limit': int(os.getenv('PROCESS_LIMIT', '0')) or None,
-        'max_error': float(os.getenv('MAX_HOMO_ERROR', '10.0')),
-        'export_limit': int(os.getenv('EXPORT_LIMIT', '10000')),
-        'min_match_count': int(os.getenv('MIN_MATCH_COUNT', '0')),
-
+        "base_path": base_path,
+        "model_type": model_type,
+        "db_path": os.path.join(
+            base_path,
+            f"OUTPUT_{model_type}",
+            os.getenv("DB_NAME", "matches.db"),
+        ),
+        "image_base_path": os.path.join(
+            base_path,
+            f"OUTPUT_{model_type}",
+            os.getenv("PATCHES_DIR", "patches"),
+        ),
+        "feature_cache_dir": os.path.join(
+            base_path,
+            f"OUTPUT_{model_type}",
+            os.getenv("PATCHES_CACHE", "cache"),
+        ),
+        "error_cache_dir": os.path.join(
+            base_path,
+            f"OUTPUT_{model_type}",
+            os.getenv("ERROR_CACHE", "error_cache"),
+        ),
+        "output_csv": os.path.join(
+            base_path,
+            f"OUTPUT_{model_type}",
+            os.getenv("HOMO_CSV", "homography_matches.csv"),
+        ),
+        "num_workers": int(
+            os.getenv("NUM_WORKERS", str(batch_sizer.get_optimal_workers(8)))
+        ),
+        "batch_size": int(
+            os.getenv(
+                "BATCH_SIZE", str(batch_sizer.get_optimal_batch_size(500))
+            )
+        ),
+        "process_limit": int(os.getenv("PROCESS_LIMIT", "0")) or None,
+        "max_error": float(os.getenv("MAX_HOMO_ERROR", "10.0")),
+        "export_limit": int(os.getenv("EXPORT_LIMIT", "10000")),
+        "min_match_count": int(os.getenv("MIN_MATCH_COUNT", "0")),
     }
 
     return config
@@ -2083,46 +2401,43 @@ def main():
 
     parser = argparse.ArgumentParser(
         description="Database-Integrated Homography Error Calculator (Phase 2 Optimized)",
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     parser.add_argument(
         "--mode",
         choices=["process", "export", "stats", "debug", "recalc", "all"],
         default="all",
-        help="Operation mode (default: all)"
+        help="Operation mode (default: all)",
     )
 
     ### DEBUG FEATURE: Add debug-specific arguments ###
     parser.add_argument(
         "--match-id",
         type=int,
-        help="Match ID to debug (required for debug mode)"
+        help="Match ID to debug (required for debug mode)",
     )
 
     parser.add_argument(
         "--force-recalc",
         action="store_true",
-        help="Force recalculation in debug mode even if result exists"
+        help="Force recalculation in debug mode even if result exists",
     )
 
     ### RECALC FEATURE: Add recalculation arguments ###
     parser.add_argument(
         "--recalc-above",
         type=int,
-        help="Recalculate all matches with match_count above this threshold (required for recalc mode)"
+        help="Recalculate all matches with match_count above this threshold (required for recalc mode)",
     )
 
     parser.add_argument(
         "--recalc-limit",
         type=int,
-        help="Limit number of matches to recalculate (optional, default: all)"
+        help="Limit number of matches to recalculate (optional, default: all)",
     )
 
-    parser.add_argument(
-        "--config",
-        help="Path to .env configuration file"
-    )
+    parser.add_argument("--config", help="Path to .env configuration file")
 
     args = parser.parse_args()
 
@@ -2140,16 +2455,18 @@ def main():
     if args.mode == "recalc" and not args.recalc_above:
         print("❌ Error: --recalc-above is required for recalc mode")
         print("Example: python script.py --mode recalc --recalc-above 5000")
-        print("         python script.py --mode recalc --recalc-above 5000 --recalc-limit 100")
+        print(
+            "         python script.py --mode recalc --recalc-above 5000 --recalc-limit 100"
+        )
         sys.exit(1)
 
     try:
         config = load_config()
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print(" DATABASE-INTEGRATED HOMOGRAPHY ERROR CALCULATOR")
         print(" PHASE 2 OPTIMIZED VERSION (MPS + ADVANCED + DEBUG + RECALC)")
-        print("="*70)
+        print("=" * 70)
         print(f"  Database: {os.path.basename(config['db_path'])}")
         print(f"  Model type: {config['model_type']}")
         print(f"  Workers: {config['num_workers']}")
@@ -2157,12 +2474,12 @@ def main():
 
         # Initialize processor
         processor = ParallelHomographyProcessor(
-            db_path=config['db_path'],
-            image_base_path=config['image_base_path'],
-            feature_cache_dir=config['feature_cache_dir'],
-            error_cache_dir=config['error_cache_dir'],
-            num_workers=config['num_workers'],
-            min_match_count = config['min_match_count']
+            db_path=config["db_path"],
+            image_base_path=config["image_base_path"],
+            feature_cache_dir=config["feature_cache_dir"],
+            error_cache_dir=config["error_cache_dir"],
+            num_workers=config["num_workers"],
+            min_match_count=config["min_match_count"],
         )
 
         ### DEBUG FEATURE: Handle debug mode ###
@@ -2174,32 +2491,39 @@ def main():
             processor.recalculate_matches_above_threshold(
                 min_match_count=args.recalc_above,
                 limit=args.recalc_limit,
-                batch_size=config['batch_size']
+                batch_size=config["batch_size"],
             )
 
         elif args.mode in ["process", "all"]:
             processor.run_parallel_processing(
-                batch_size=config['batch_size'],
-                limit=config['process_limit']
+                batch_size=config["batch_size"], limit=config["process_limit"]
             )
 
-        if args.mode in ["export", "all"] and args.mode not in ["debug", "recalc"]:
+        if args.mode in ["export", "all"] and args.mode not in [
+            "debug",
+            "recalc",
+        ]:
             processor.export_results_to_csv(
-                output_path=config['output_csv'],
-                limit=config['export_limit'],
-                max_error=config['max_error']
+                output_path=config["output_csv"],
+                limit=config["export_limit"],
+                max_error=config["max_error"],
             )
 
-        if args.mode in ["stats", "all"] and args.mode not in ["debug", "recalc"]:
+        if args.mode in ["stats", "all"] and args.mode not in [
+            "debug",
+            "recalc",
+        ]:
             print("\n📊 DATABASE STATISTICS")
             print("-" * 70)
-            stats = processor.db.get_homography_statistics(min_match_count = config['min_match_count'])
+            stats = processor.db.get_homography_statistics(
+                min_match_count=config["min_match_count"]
+            )
 
             # Create a visual representation
-            completion = stats['completion_percentage']
+            completion = stats["completion_percentage"]
             bar_length = 40
             filled = int(bar_length * completion / 100)
-            bar = '█' * filled + '░' * (bar_length - filled)
+            bar = "█" * filled + "░" * (bar_length - filled)
 
             print(f"  Completion: |{bar}| {completion:.1f}%")
             print(f"  Total matches: {stats['total_matches']:,}")
@@ -2207,14 +2531,16 @@ def main():
             print(f"  Valid: {stats['valid_count']:,}")
             print(f"  Pending: {stats['pending_computation']:,}")
 
-            if stats['valid_count'] > 0:
+            if stats["valid_count"] > 0:
                 print(f"\n  Error Statistics:")
                 print(f"    Average: {stats['avg_error']:.2f} pixels")
-                print(f"    Range: {stats['min_error']:.2f} - {stats['max_error']:.2f} pixels")
+                print(
+                    f"    Range: {stats['min_error']:.2f} - {stats['max_error']:.2f} pixels"
+                )
 
         if args.mode not in ["debug", "recalc"]:
             print("\n✅ All operations completed successfully!")
-        print("="*70 + "\n")
+        print("=" * 70 + "\n")
 
     except ValueError as e:
         print(f"\n❌ Configuration error: {e}")
@@ -2224,10 +2550,14 @@ def main():
 
     except KeyboardInterrupt:
         print("\n\n⏹️  Processing interrupted by user")
-        print("="*70)
-        print("ℹ️  The process can be resumed by running the same command again.")
-        print("   Already computed homography errors will be skipped automatically.")
-        print("="*70 + "\n")
+        print("=" * 70)
+        print(
+            "ℹ️  The process can be resumed by running the same command again."
+        )
+        print(
+            "   Already computed homography errors will be skipped automatically."
+        )
+        print("=" * 70 + "\n")
 
     except Exception as e:
         print(f"\n❌ Error: {e}")

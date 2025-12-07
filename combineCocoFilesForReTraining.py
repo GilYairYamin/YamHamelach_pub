@@ -65,7 +65,7 @@ def load_args():
 def main():
     args = load_args()
 
-    patches_dir = os.path.join(args.base_path, "OUTPUT_faster_rcnn", "output_patches")
+    patches_dir = os.path.join(args.base_path, "new-training-patches-2.12.2025")
 
     image_dirs = os.listdir(patches_dir)
 
