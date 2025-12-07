@@ -45,7 +45,7 @@ except ImportError:
     YOLO_AVAILABLE = False
     print("Warning: ultralytics not available. YOLO models will not work.")
 
-from env_arguments_loader import load_env_arguments
+from tools.env_arguments_loader import load_env_arguments
 
 
 class ModelType(Enum):

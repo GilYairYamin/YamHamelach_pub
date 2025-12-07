@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from tqdm import tqdm
 
-from env_arguments_loader import load_env_arguments
+from tools.env_arguments_loader import load_env_arguments
 
 
 def load_args():

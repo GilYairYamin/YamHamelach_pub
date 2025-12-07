@@ -2,7 +2,7 @@ import os
 
 import pandas as pd
 
-from env_arguments_loader import load_env_arguments
+from tools.env_arguments_loader import load_env_arguments
 
 # ERROR = 40
 CHUNK_SIZE = 100000

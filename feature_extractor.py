@@ -4,9 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 from dotenv import load_dotenv
-from tqdm import tqdm
-
 from PAM_matcher import TwoImagesMatchFeatures, to_patch_fn
+from tqdm import tqdm
 
 load_dotenv()
 
@@ -25,14 +24,18 @@ print("PAIRS_OUT:", PAIRS_OUT)
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--patches", help="path for patches", default=PATCHES_IN)
+    parser.add_argument(
+        "--patches", help="path for patches", default=PATCHES_IN
+    )
     parser.add_argument(
         "--pairs_path",
         help="path for pre-prepared true/false images",
         default=PAIRS_OUT,
     )
     parser.add_argument(
-        "--features_path", help="path for output true/false features", default=base_path
+        "--features_path",
+        help="path for output true/false features",
+        default=base_path,
     )
     args = parser.parse_args()
 

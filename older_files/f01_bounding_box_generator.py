@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 from tqdm import tqdm
 from ultralytics import YOLO
 
-from env_arguments_loader import load_env_arguments
+from tools.env_arguments_loader import load_env_arguments
 
 
 def center(box, dtype=None):

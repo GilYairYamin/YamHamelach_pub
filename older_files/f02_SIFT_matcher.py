@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from env_arguments_loader import load_env_arguments
+from tools.env_arguments_loader import load_env_arguments
 
 # Increase the CSV field size limit
 csv.field_size_limit(sys.maxsize)
