@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yam_hamelach"
+version = "0.1.0"
+authors = [
+  { name="User", email="user@example.com" },
+]
+description = "Yam Hamelach public repository"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "pandas",
+    "opencv-python-headless",
+    "tqdm",
+    "python-dotenv",
+    "matplotlib",
+    "sqlalchemy",
+    "psycopg2-binary",
+    "plotly",
+    "numba",
+]

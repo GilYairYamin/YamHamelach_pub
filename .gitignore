@@ -1,17 +1,36 @@
-# created by virtualenv automatically
-.streamlit/secrets.toml
+# General
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.DS_Store
+Thumbs.db
 
-/.idea/*
-*.pt
-/pyvenv.cfg
-/share/*
-/__pycache__/*
+# Environment
+.env
+.venv/
+env/
+venv/
+ENV/
 
-**/__pycache__
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
 
+# Project specific
+local_data/
+legacy/
+input/
+output/
+*.log
+*.pkl
+*.sqlite
+*.db
 
-/local_data
-/.vscode
-/.conda
-/.vscode
-/.venv
+# Docker
+postgres_docker/postgres_data/
+
+# Documentation
+docs/_build/

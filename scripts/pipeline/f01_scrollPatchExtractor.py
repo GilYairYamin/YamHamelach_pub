@@ -45,7 +45,7 @@ except ImportError:
     YOLO_AVAILABLE = False
     print("Warning: ultralytics not available. YOLO models will not work.")
 
-from tools.env_arguments_loader import load_env_arguments
+from yam_hamelach.tools.env_arguments_loader import load_env_arguments
 
 
 class ModelType(Enum):
@@ -212,7 +212,7 @@ class ImagePatchExtractor:
         elif self._model_type == ModelType.FASTER_RCNN:
             # Import the load_model function from tools.predict
             try:
-                from tools.predict import load_model
+                from yam_hamelach.tools.predict import load_model
             except ImportError:
                 raise ImportError(
                     "tools.predict module is required for Faster R-CNN models"

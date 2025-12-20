@@ -9,3 +9,7 @@ streamlit
 dropbox
 python-dotenv 
 tqdm
+sqlalchemy
+psycopg2-binary
+plotly
+numba

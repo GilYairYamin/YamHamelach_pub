@@ -53,7 +53,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from tools.env_arguments_loader import load_env_arguments
+from yam_hamelach.tools.env_arguments_loader import load_env_arguments
 
 # Increase the CSV field size limit to handle large match data
 csv.field_size_limit(sys.maxsize)

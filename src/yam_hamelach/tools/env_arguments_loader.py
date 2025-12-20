@@ -5,7 +5,12 @@ from dotenv import dotenv_values
 
 
 def load_env_arguments(use_clean_csv: bool = True):
-    raw_args = dotenv_values()
+    env_path = os.path.join(os.getcwd(), "config", ".env")
+    if not os.path.exists(env_path):
+        # Fallback to current directory or default behavior if needed
+        env_path = ".env"
+    
+    raw_args = dotenv_values(env_path)
     args = {}
 
     keys = list(raw_args.keys())

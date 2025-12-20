@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 from dotenv import load_dotenv
-from PAM_matcher import TwoImagesMatchFeatures, to_patch_fn
+from yam_hamelach.matchers import TwoImagesMatchFeatures, to_patch_fn
 from tqdm import tqdm
 
 load_dotenv()
